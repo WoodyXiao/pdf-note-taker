@@ -1,3 +1,5 @@
+import { api } from "@/convex/_generated/api";
+import { useAction } from "convex/react";
 import {
   Bold,
   Italic,
@@ -9,10 +11,31 @@ import {
   Heading3,
   ListOrdered,
   Highlighter,
+  Sparkles,
 } from "lucide-react";
 import React from "react";
+import { useParams } from "next/navigation";
 
 function EditorExtension({ editor }) {
+  const { fileId } = useParams();
+
+  const SearchAI = useAction(api.myAction.search);
+
+  const onAIClick = async () => {
+    const selectedText = editor.state.doc.textBetween(
+      editor.state.selection.from,
+      editor.state.selection.to,
+      " "
+    );
+
+    const result = await SearchAI({
+      query: selectedText,
+      fileId: fileId,
+    });
+    console.log('selectedText', selectedText)
+    console.log('raw ans: ', result)
+  };
+
   return (
     editor && (
       <div className="p-5">
@@ -105,6 +128,13 @@ function EditorExtension({ editor }) {
               className={editor.isActive("highlight") ? "text-blue-500" : ""}
             >
               <Highlighter />
+            </button>
+
+            <button
+              onClick={() => onAIClick()}
+              className={"hover:text-blue-500"}
+            >
+              <Sparkles />
             </button>
           </div>
         </div>
