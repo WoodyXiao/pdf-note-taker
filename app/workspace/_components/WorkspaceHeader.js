@@ -4,7 +4,8 @@ import React from "react";
 function WorkspaceHeader() {
   return (
     <div className="p-4 flex justify-between shadow-md">
-      <Image src={"/logo.svg"} alt="logo" width={140} height={100} />
+      {/* <Image src={"/logo.svg"} alt="logo" width={140} height={100} /> */}
+      PDF Note Taker
     </div>
   );
 }
