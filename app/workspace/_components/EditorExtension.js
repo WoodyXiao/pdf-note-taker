@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import React from "react";
 import { useParams } from "next/navigation";
+import { chatSession } from "@/app/configs/AIModel";
 
 function EditorExtension({ editor }) {
   const { fileId } = useParams();
@@ -41,8 +42,20 @@ function EditorExtension({ editor }) {
       });
 
     const PROMPT = `For question : ${selectedText} and with the given content as answer, please give appropriate answer in HTML format. The answer content is ${AllUnformattedanswer}`;
-  
-    
+
+    const AIModelResult = await chatSession.sendMessage(PROMPT);
+    console.log(AIModelResult.response.text());
+
+    const finalText = AIModelResult.response
+      .text()
+      .replace("```", "")
+      .replace("html", "")
+      .replace("```", "");
+
+    const AllText = editor.getHTML();
+    editor.commands.setContent(
+      AllText + "<p><strong>Answer(AI): </strong>" + finalText + "</p>"
+    );
   };
 
   return (
