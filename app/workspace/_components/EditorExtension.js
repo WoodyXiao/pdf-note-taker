@@ -32,8 +32,17 @@ function EditorExtension({ editor }) {
       query: selectedText,
       fileId: fileId,
     });
-    console.log('selectedText', selectedText)
-    console.log('raw ans: ', result)
+
+    const UnformattedAns = JSON.parse(result);
+    let AllUnformattedanswer = "";
+    UnformattedAns &&
+      UnformattedAns.forEach((item) => {
+        AllUnformattedanswer = AllUnformattedanswer + item.pageContent;
+      });
+
+    const PROMPT = `For question : ${selectedText} and with the given content as answer, please give appropriate answer in HTML format. The answer content is ${AllUnformattedanswer}`;
+  
+    
   };
 
   return (
