@@ -46,9 +46,6 @@ export const search = action({
     const results = await vectorStore.similaritySearch(args.query, 10);
     const filtered = results.filter((q) => q.metadata?.fileId === args.fileId);
 
-    console.log("similaritySearch raw result:", results);
-    console.log("filtered:", filtered);
-
     return JSON.stringify(filtered);
   },
 });

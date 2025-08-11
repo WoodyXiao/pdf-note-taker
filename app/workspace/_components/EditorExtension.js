@@ -16,6 +16,7 @@ import {
 import React from "react";
 import { useParams } from "next/navigation";
 import { chatSession } from "@/app/configs/AIModel";
+import { toast } from "sonner";
 
 function EditorExtension({ editor }) {
   const { fileId } = useParams();
@@ -23,6 +24,7 @@ function EditorExtension({ editor }) {
   const SearchAI = useAction(api.myAction.search);
 
   const onAIClick = async () => {
+    toast("AI is getting your answer...");
     const selectedText = editor.state.doc.textBetween(
       editor.state.selection.from,
       editor.state.selection.to,
