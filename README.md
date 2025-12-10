@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+## PDF Note Taker
 
-## Getting Started
+A simple full-stack project for uploading PDFs and taking notes, built with a **Django REST API** backend and a **React + Vite** frontend.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+### Project Structure
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- `backend/`: Django REST API (authentication, file upload, AI-related endpoints, etc.)
+- `frontend/`: React + Vite SPA that talks to the backend.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### How to run the backend (Django)
 
-## Learn More
+1. Go to the backend folder:
 
-To learn more about Next.js, take a look at the following resources:
+   ```bash
+   cd backend
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+2. Create and activate a virtual environment (recommended):
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
 
-## Deploy on Vercel
+3. Install Python dependencies:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+4. Make sure PostgreSQL is running and the database in `core/settings.py` / `.env` exists, then run migrations:
+
+   ```bash
+   python manage.py migrate
+   ```
+
+5. Start the Django development server:
+
+   ```bash
+   python manage.py runserver
+   ```
+
+The backend will be available at `http://127.0.0.1:8000/`.
+
+---
+
+### How to run the frontend (Vite + React)
+
+1. Go to the frontend folder:
+
+   ```bash
+   cd frontend
+   ```
+
+2. Install Node dependencies:
+
+   ```bash
+   npm install
+   ```
+
+3. Start the dev server:
+
+   ```bash
+   npm run dev
+   ```
+
+Vite will show you a local URL (usually `http://localhost:5173`) where you can access the app.
+
+
