@@ -8,7 +8,7 @@ from rest_framework.response import Response
 
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 
-from files.models import DocumentEmbedding, PdfFile
+from files.models import DocumentEmbedding, Notebook, NotebookPdf, PdfFile
 
 
 @api_view(["POST"])
@@ -21,11 +21,12 @@ def answer(request):
     - Return the HTML back to the frontend
     """
     question = request.data.get("question", "").strip()
-    file_id = request.data.get("fileId")
+    notebook_id = request.data.get("notebookId")
+    file_id = request.data.get("fileId")  # legacy support
 
-    if not question or not file_id:
+    if not question:
         return Response(
-            {"detail": "question and fileId are required"},
+            {"detail": "question is required"},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -36,8 +37,6 @@ def answer(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
-    pdf_file = get_object_or_404(PdfFile, file_id=file_id)
-
     # 1. Embed the question
     embeddings_model = GoogleGenerativeAIEmbeddings(
         model="text-embedding-004",
@@ -45,9 +44,37 @@ def answer(request):
     )
     query_vector = embeddings_model.embed_query(question)
 
-    # 2. Retrieve top-k similar chunks for this file
+    # 2. Determine which PDF files to search over
+    files_qs = None
+
+    if notebook_id:
+        # New behavior: use all files attached to the given notebook that belong to the user.
+        notebook = get_object_or_404(
+            Notebook, id=notebook_id, owner=request.user
+        )
+        file_ids = NotebookPdf.objects.filter(notebook=notebook).values_list(
+            "file_id", flat=True
+        )
+        files_qs = PdfFile.objects.filter(id__in=file_ids, created_by=request.user)
+
+        if not files_qs.exists():
+            return Response(
+                {"detail": "No PDFs selected in this notebook."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+    elif file_id:
+        # Legacy behavior: single file context
+        pdf_file = get_object_or_404(PdfFile, file_id=file_id)
+        files_qs = PdfFile.objects.filter(id=pdf_file.id, created_by=request.user)
+    else:
+        return Response(
+            {"detail": "Either notebookId or fileId is required"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # 3. Retrieve top-k similar chunks across the selected files
     candidates = (
-        DocumentEmbedding.objects.filter(file=pdf_file)
+        DocumentEmbedding.objects.filter(file__in=files_qs)
         .annotate(distance=CosineDistance("embedding", query_vector))
         .order_by("distance")[:10]
     )

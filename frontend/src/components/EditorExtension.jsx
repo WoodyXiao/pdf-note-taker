@@ -15,7 +15,7 @@ import {
 import axios from "axios";
 import { toast } from "sonner";
 
-function EditorExtension({ editor, fileId }) {
+function EditorExtension({ editor, fileId, notebookId }) {
   if (!editor) return null;
 
   const onAIClick = async () => {
@@ -43,7 +43,8 @@ function EditorExtension({ editor, fileId }) {
         "/api/ai/answer/",
         {
           question: selectedText,
-          fileId,
+          // Prefer notebook-level RAG when notebookId is provided.
+          ...(notebookId ? { notebookId } : { fileId }),
         },
         {
           headers: {

@@ -4,8 +4,8 @@ from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 
-from .models import PdfFile
-from .serializers import PdfFileSerializer
+from .models import Notebook, NotebookPdf, PdfFile
+from .serializers import NotebookSerializer, PdfFileSerializer
 from .tasks import ingest_pdf_task
 
 
@@ -61,4 +61,65 @@ def get_file(request, file_id):
     return Response(data)
 
 
+@api_view(["GET", "POST"])
+def notebooks(request):
+    """
+    GET: List all notebooks for current user.
+    POST: Create a new notebook with given name.
+    """
+    user = request.user
+
+    if request.method == "GET":
+        qs = Notebook.objects.filter(owner=user).order_by("-created_at")
+        serializer = NotebookSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    # POST
+    name = request.data.get("name") or "Untitled Notebook"
+    notebook = Notebook.objects.create(owner=user, name=name)
+    serializer = NotebookSerializer(notebook)
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET"])
+def notebook_detail(request, notebook_id):
+    """
+    Get a single notebook (id, name, created_at).
+    """
+    notebook = get_object_or_404(Notebook, id=notebook_id, owner=request.user)
+    serializer = NotebookSerializer(notebook)
+    return Response(serializer.data)
+
+
+@api_view(["GET", "PUT"])
+def notebook_files(request, notebook_id):
+    """
+    GET: Return list of fileIds attached to the notebook.
+    PUT: Replace notebook's file set with provided fileIds.
+    """
+    notebook = get_object_or_404(Notebook, id=notebook_id, owner=request.user)
+
+    if request.method == "GET":
+        file_ids = list(
+            NotebookPdf.objects.filter(notebook=notebook).values_list(
+                "file__file_id", flat=True
+            )
+        )
+        return Response({"fileIds": file_ids})
+
+    # PUT: update selection
+    ids = request.data.get("fileIds") or []
+    # Map external file_id (UUID) to PdfFile objects for this user
+    pdfs = list(
+        PdfFile.objects.filter(
+            file_id__in=ids, created_by=request.user
+        )
+    )
+
+    NotebookPdf.objects.filter(notebook=notebook).delete()
+    NotebookPdf.objects.bulk_create(
+        [NotebookPdf(notebook=notebook, file=pdf) for pdf in pdfs]
+    )
+
+    return Response({"fileIds": ids}, status=status.HTTP_200_OK)
 

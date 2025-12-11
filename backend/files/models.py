@@ -32,4 +32,31 @@ class DocumentEmbedding(models.Model):
         return f"Embedding for {self.file.file_name}"
 
 
+class Notebook(models.Model):
+    """User-owned notebook that can group multiple PDF files."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notebooks"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.owner})"
+
+
+class NotebookPdf(models.Model):
+    """Many-to-many relation between notebooks and PDF files."""
+
+    notebook = models.ForeignKey(
+        Notebook, on_delete=models.CASCADE, related_name="notebook_pdfs"
+    )
+    file = models.ForeignKey(
+        PdfFile, on_delete=models.CASCADE, related_name="in_notebooks"
+    )
+
+    class Meta:
+        unique_together = ("notebook", "file")
+
 
