@@ -1,41 +1,50 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# ---- Python / Django ----
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+# Byte-compiled / optimized / DLL files
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
 
-# testing
-/coverage
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
 
-# next.js
-/.next/
-/out/
+# Environment files (API keys, secrets)
+.env
+backend/.env
 
-# production
-/build
+# Django collected static & uploaded media
+backend/staticfiles/
+backend/media/
 
-# misc
-.DS_Store
-*.pem
+# Local PostgreSQL config (machine-specific)
+backend/postgresql.conf
 
-# debug
+
+# ---- Node / Vite frontends ----
+
+# Node dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+**/dist/
+
+# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
+pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
 
-# vercel
-.vercel
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts

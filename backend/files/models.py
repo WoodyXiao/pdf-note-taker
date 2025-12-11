@@ -1,0 +1,35 @@
+import uuid
+
+from django.conf import settings
+from django.db import models
+from pgvector.django import VectorField
+
+
+class PdfFile(models.Model):
+    file_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    file_name = models.CharField(max_length=255)
+    file = models.FileField(upload_to="pdfs/")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="pdf_files"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.file_name
+
+
+class DocumentEmbedding(models.Model):
+    """Stores vector embeddings for chunks of a PDF file."""
+
+    file = models.ForeignKey(
+        PdfFile, on_delete=models.CASCADE, related_name="embeddings"
+    )
+    text = models.TextField()
+    embedding = VectorField(dimensions=768)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Embedding for {self.file.file_name}"
+
+
+

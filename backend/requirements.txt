@@ -1,0 +1,14 @@
+Django>=5.0
+djangorestframework>=3.15
+psycopg2-binary>=2.9
+django-cors-headers>=3.14.0
+celery>=5.4.0
+redis>=5.0.0
+langchain>=0.3.0
+langchain-community>=0.3.0
+langchain-google-genai>=1.0.0
+langchain-text-splitters>=0.3.0
+pgvector>=0.2.5
+python-dotenv>=1.0.0
+pypdf>=4.0.0
+
