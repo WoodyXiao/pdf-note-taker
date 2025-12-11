@@ -10,8 +10,11 @@ __pycache__/
 venv/
 .venv/
 env/
-.env/
 ENV/
+
+# Environment files (API keys, secrets)
+.env
+backend/.env
 
 # Django collected static & uploaded media
 backend/staticfiles/
