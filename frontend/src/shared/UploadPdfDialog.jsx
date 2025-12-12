@@ -53,7 +53,13 @@ function UploadPdfDialog() {
         <input
           type="file"
           accept="application/pdf"
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
+          onChange={(e) => {
+            const f = e.target.files?.[0] || null;
+            setFile(f);
+            if (f && !fileName) {
+              setFileName(f.name);
+            }
+          }}
         />
       </div>
       <div style={{ marginTop: 8 }}>

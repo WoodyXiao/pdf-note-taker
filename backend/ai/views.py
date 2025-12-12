@@ -1,4 +1,6 @@
 import os
+import re
+from collections import defaultdict
 
 from django.shortcuts import get_object_or_404
 from pgvector.django import CosineDistance
@@ -87,28 +89,96 @@ def answer(request):
 
     llm = ChatGoogleGenerativeAI(
         model=model_id,
-        temperature=1,
+        temperature=0.7,
         max_output_tokens=8192,
         google_api_key=api_key,
     )
 
     prompt = (
-        f"For question : {question} and with the given content as answer, "
-        f"please give appropriate answer in HTML format. "
-        f'The answer content is {all_unformatted_answer}'
+        "You are an assistant helping a user study their PDF notes.\n"
+        "Using ONLY the provided context, answer the user's question in clear HTML.\n"
+        "Rules:\n"
+        "- Return ONLY an HTML fragment (no <html>, <head>, or <body> tags).\n"
+        "- Use simple tags like <p>, <h2>, <h3>, <ul>, <ol>, <li>, <strong>, <em>, <code>.\n"
+        "- Do NOT include language attributes like lang=\"en\".\n"
+        "- Avoid LaTeX or TeX syntax such as $, $$, \\(, \\); instead, write formulas in plain text, "
+        'for example: "x^2 + y^2 = 1" or "1/2".\n'
+        "- Provide a well-structured, reasonably detailed explanation with headings and bullet points when helpful.\n\n"
+        f"User question:\n{question}\n\n"
+        "Relevant context from the PDFs:\n"
+        f"{all_unformatted_answer}\n"
     )
 
     result = llm.invoke(prompt)
-    raw_text = str(getattr(result, "content", result))
 
-    # 4. Lightly clean markdown code fencing if present
-    cleaned = (
-        raw_text.replace("```", "")
-        .replace("html", "")
-        .replace("HTML", "")
-        .strip()
+    # Gemini responses can be either a plain string or a list of content parts.
+    content = getattr(result, "content", result)
+
+    if isinstance(content, str):
+        raw_text = content
+    elif isinstance(content, list):
+        # Extract "text" fields from structured content parts
+        parts = []
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                parts.append(part.get("text", ""))
+            else:
+                parts.append(str(part))
+        raw_text = "\n".join(parts)
+    else:
+        raw_text = str(content)
+
+    # 4. Lightly clean markdown/code fencing and strip outer html/body tags if any
+    no_fences = raw_text.replace("```", "").strip()
+    # Remove <html>, </html>, <body>, </body> if model still returns them
+    cleaned = re.sub(
+        r"</?(html|body)[^>]*>",
+        "",
+        no_fences,
+        flags=re.IGNORECASE,
+    ).strip()
+
+    # Additional light LaTeX cleanup: keep the text but drop common TeX markers
+    # Remove inline/blocked $...$ while keeping the inner content
+    cleaned = re.sub(r"\$\$(.+?)\$\$", r"\1", cleaned, flags=re.DOTALL)
+    cleaned = re.sub(r"\$(.+?)\$", r"\1", cleaned, flags=re.DOTALL)
+    # \text{...} -> ...
+    cleaned = re.sub(r"\\text\{([^}]*)\}", r"\1", cleaned)
+    # Replace some common greek letters to plain text names
+    cleaned = re.sub(
+        r"\\(alpha|beta|gamma|delta|theta|lambda|rho|sigma|mu|nu|pi|phi|psi|omega)\b",
+        r"\1",
+        cleaned,
     )
+    # Drop any remaining backslash-commands like \sum, \frac, etc.
+    cleaned = re.sub(r"\\[a-zA-Z]+", "", cleaned)
 
-    return Response({"html": cleaned})
+    # 5. Build simple Sources section from retrieved chunks (group by file + pages)
+    sources_by_file = defaultdict(lambda: {"pages": set(), "has_page": False})
+    for c in candidates:
+        entry = sources_by_file[c.file.file_name]
+        if c.page_number:
+            entry["pages"].add(c.page_number)
+            entry["has_page"] = True
+
+    sources_html = ""
+    if sources_by_file:
+        parts = ['<hr style="margin-top:16px;margin-bottom:8px;"/>']
+        parts.append(
+            '<div style="font-size:12px;color:#666;"><strong>Sources</strong>:<ul style="padding-left:18px;margin:4px 0;">'
+        )
+        for file_name, meta in sources_by_file.items():
+            if meta["has_page"]:
+                page_list = ", ".join(str(p) for p in sorted(meta["pages"]))
+                label = f"{file_name} – page(s) {page_list}"
+            else:
+                label = file_name
+            parts.append(f"<li>{label}</li>")
+        parts.append("</ul></div>")
+        sources_html = "".join(parts)
+
+    final_html = cleaned + sources_html
+
+    return Response({"html": final_html})
 
 

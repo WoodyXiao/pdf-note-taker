@@ -15,7 +15,8 @@ def upload_pdf(request):
     """Upload a PDF file, create a PdfFile record, and ingest it into the vector store."""
     user = request.user
     file_obj = request.FILES.get("file")
-    file_name = request.data.get("fileName") or "Untitled File"
+    # Default file name to uploaded file's original name if none provided
+    file_name = request.data.get("fileName") or getattr(file_obj, "name", None) or "Untitled File"
 
     if not file_obj:
         return Response(
@@ -53,8 +54,16 @@ def list_files(request):
 
 @api_view(["GET"])
 def get_file(request, file_id):
-    """Get metadata for a single PdfFile by file_id (UUID)."""
-    pdf_file = get_object_or_404(PdfFile, file_id=file_id)
+    """
+    GET: Get metadata for a single PdfFile by file_id (UUID).
+    DELETE: Remove the PdfFile and its related embeddings/notebook links.
+    """
+    pdf_file = get_object_or_404(PdfFile, file_id=file_id, created_by=request.user)
+
+    if request.method == "DELETE":
+        pdf_file.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     serializer = PdfFileSerializer(pdf_file)
     data = serializer.data
     data["file_url"] = request.build_absolute_uri(pdf_file.file.url)

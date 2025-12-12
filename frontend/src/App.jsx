@@ -12,9 +12,9 @@ function App() {
     token ? element : <Navigate to="/login" replace />;
 
   return (
-    <div>
+    <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
       <TopNav />
-      <div>
+      <div style={{ flex: 1, minHeight: 0 }}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
 

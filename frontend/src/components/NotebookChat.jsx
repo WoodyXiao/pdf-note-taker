@@ -22,7 +22,6 @@ function NotebookChat({ notebookId }) {
     setMessages((prev) => [...prev, { role: "user", content: question }]);
     setInput("");
     setLoading(true);
-    toast("AI is generating an answer...");
 
     try {
       const res = await axios.post(
@@ -39,7 +38,6 @@ function NotebookChat({ notebookId }) {
     } catch (err) {
       console.error(err);
       toast.error("AI request failed");
-      // Rollback last user message if needed? We'll keep it for context.
     } finally {
       setLoading(false);
     }
@@ -50,23 +48,39 @@ function NotebookChat({ notebookId }) {
       style={{
         borderTop: "1px solid #eee",
         paddingTop: 8,
-        marginTop: 8,
         display: "flex",
         flexDirection: "column",
-        height: "260px",
+        height: "100%",
       }}
     >
+      {/* Header */}
+      <div
+        style={{
+          fontSize: 13,
+          fontWeight: 500,
+          color: "#444",
+          marginBottom: 4,
+        }}
+      >
+        Notebook Chat
+      </div>
+
+      {/* Messages */}
       <div
         style={{
           flex: 1,
+          minHeight: 0, // allow this area to shrink so the input stays visible
           overflowY: "auto",
           padding: "4px 2px",
           marginBottom: 8,
           fontSize: 13,
+          border: "1px solid #f0f0f0",
+          borderRadius: 6,
+          background: "#fafafa",
         }}
       >
         {messages.length === 0 ? (
-          <p style={{ color: "#888" }}>
+          <p style={{ color: "#888", margin: 8 }}>
             Ask a question about the selected PDFs. Answers will appear here.
           </p>
         ) : (
@@ -74,41 +88,80 @@ function NotebookChat({ notebookId }) {
             <div
               key={idx}
               style={{
-                marginBottom: 6,
+                margin: "6px 8px",
                 textAlign: m.role === "user" ? "right" : "left",
               }}
             >
               <div
                 style={{
                   display: "inline-block",
+                  maxWidth: "90%",
                   padding: "6px 10px",
                   borderRadius: 8,
                   background:
                     m.role === "user" ? "#e0f2ff" : "rgba(0,0,0,0.03)",
+                  color: "#222",
+                  textAlign: "left",
                 }}
-                // AI 回复支持简单 HTML
-                dangerouslySetInnerHTML={{ __html: m.content }}
-              />
+              >
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "#777",
+                    marginBottom: 2,
+                  }}
+                >
+                  {m.role === "user" ? "You" : "AI"}
+                </div>
+                {/* AI 回复支持简单 HTML */}
+                <div
+                  dangerouslySetInnerHTML={{ __html: m.content }}
+                />
+              </div>
             </div>
           ))
         )}
       </div>
 
-      <form
-        onSubmit={handleSend}
-        style={{ display: "flex", gap: 8, alignItems: "center" }}
+      {/* Input */}
+      <div
+        style={{
+          padding: "0 2px", // 对齐上面的 messages 宽度
+        }}
       >
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask AI about the selected PDFs..."
-          style={{ flex: 1 }}
-          disabled={loading || !notebookId}
-        />
-        <button type="submit" disabled={loading || !input.trim()}>
-          {loading ? "Asking..." : "Send"}
-        </button>
-      </form>
+        <form
+          onSubmit={handleSend}
+          style={{
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+          }}
+        >
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ask AI about the selected PDFs..."
+            style={{
+              flex: 1,
+              padding: "6px 8px",
+              borderRadius: 4,
+              border: "1px solid #ddd",
+              fontSize: 13,
+            }}
+            disabled={loading || !notebookId}
+          />
+          <button
+            type="submit"
+            disabled={loading || !input.trim()}
+            style={{
+              padding: "6px 10px",
+              fontSize: 13,
+            }}
+          >
+            {loading ? "Asking..." : "Send"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

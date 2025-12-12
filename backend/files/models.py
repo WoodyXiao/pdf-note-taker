@@ -26,6 +26,8 @@ class DocumentEmbedding(models.Model):
     )
     text = models.TextField()
     embedding = VectorField(dimensions=768)
+    # Optional page number within the source PDF (1-based indexing)
+    page_number = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

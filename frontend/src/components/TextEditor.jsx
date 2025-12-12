@@ -28,9 +28,22 @@ function TextEditor({ fileId, notebookId }) {
   });
 
   return (
-    <div>
+    <div
+      style={{
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       <EditorExtension editor={editor} fileId={fileId} notebookId={notebookId} />
-      <div style={{ overflow: "auto", height: "88vh", border: "1px solid #eee" }}>
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflow: "auto",
+          border: "1px solid #eee",
+        }}
+      >
         <EditorContent editor={editor} />
       </div>
     </div>

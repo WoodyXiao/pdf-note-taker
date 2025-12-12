@@ -29,11 +29,18 @@ def ingest_pdf_task(pdf_file_id: int) -> None:
 
     # Clean text chunks to avoid NUL bytes and empty strings, which Postgres does not accept.
     texts = []
+    pages = []
     for d in split_docs:
         # Replace NUL characters with spaces and strip
         cleaned = (d.page_content or "").replace("\x00", " ").strip()
         if cleaned:
             texts.append(cleaned)
+            # PyPDFLoader provides 0-based "page" in metadata; store as 1-based.
+            page_idx = d.metadata.get("page")
+            if page_idx is not None:
+                pages.append(int(page_idx) + 1)
+            else:
+                pages.append(None)
 
     if not texts:
         return
@@ -47,8 +54,13 @@ def ingest_pdf_task(pdf_file_id: int) -> None:
 
     DocumentEmbedding.objects.bulk_create(
         [
-            DocumentEmbedding(file=pdf_file, text=text, embedding=vector)
-            for text, vector in zip(texts, vectors)
+            DocumentEmbedding(
+                file=pdf_file,
+                text=text,
+                embedding=vector,
+                page_number=page,
+            )
+            for text, vector, page in zip(texts, vectors, pages)
         ]
     )
 
