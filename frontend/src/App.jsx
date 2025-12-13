@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "./pages/LoginPage";
 import NotebooksPage from "./pages/NotebooksPage";
 import NotebookPage from "./pages/NotebookPage";
+import PdfLibraryPage from "./pages/PdfLibraryPage";
 import TopNav from "./components/TopNav";
 
 function App() {
@@ -23,6 +24,12 @@ function App() {
           <Route
             path="/notebooks/:notebookId"
             element={requireAuth(<NotebookPage />)}
+          />
+
+          {/* Global PDF library */}
+          <Route
+            path="/pdfs"
+            element={requireAuth(<PdfLibraryPage />)}
           />
 
           {/* Default route */}

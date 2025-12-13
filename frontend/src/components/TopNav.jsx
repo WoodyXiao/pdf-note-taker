@@ -35,9 +35,20 @@ function TopNav() {
 
       <nav style={{ display: "flex", alignItems: "center", gap: 16 }}>
         {token && (
-          <Link to="/notebooks" style={{ textDecoration: "none", color: "#333" }}>
-            Notebooks
-          </Link>
+          <>
+            <Link
+              to="/notebooks"
+              style={{ textDecoration: "none", color: "#333" }}
+            >
+              Notebooks
+            </Link>
+            <Link
+              to="/pdfs"
+              style={{ textDecoration: "none", color: "#333" }}
+            >
+              PDFs
+            </Link>
+          </>
         )}
       </nav>
 

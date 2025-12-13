@@ -4,6 +4,7 @@ import axios from "axios";
 import TextEditor from "../components/TextEditor";
 import NotebookChat from "../components/NotebookChat";
 import { Trash2 } from "lucide-react";
+import UploadPdfDialog from "../shared/UploadPdfDialog";
 
 function NotebookPage() {
   const { notebookId } = useParams();
@@ -53,6 +54,27 @@ function NotebookPage() {
     }),
     [token]
   );
+
+  const refreshFiles = async () => {
+    if (!token) return;
+    try {
+      const [filesRes, nbFilesRes] = await Promise.all([
+        axios.get("/api/files/", { headers }),
+        axios.get(`/api/files/notebooks/${notebookId}/files/`, { headers }),
+      ]);
+      setFiles(filesRes.data);
+      setSelectedFileIds(nbFilesRes.data.fileIds || []);
+
+      // If no preview chosen yet, default to first selected/first file
+      if (!previewFileId) {
+        const initialPreview =
+          nbFilesRes.data.fileIds?.[0] || filesRes.data[0]?.file_id || null;
+        setPreviewFileId(initialPreview);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const updateNotebookSelection = async (newSelected) => {
     setSelectedFileIds(newSelected);
@@ -191,6 +213,9 @@ function NotebookPage() {
                 </button>
               )}
             </div>
+          </div>
+          <div style={{ marginBottom: 8 }}>
+            <UploadPdfDialog onUploaded={refreshFiles} />
           </div>
           {files.length === 0 ? (
             <p style={{ fontSize: 12 }}>No PDFs uploaded yet.</p>

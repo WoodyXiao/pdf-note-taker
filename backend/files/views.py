@@ -52,7 +52,7 @@ def list_files(request):
     return Response(data)
 
 
-@api_view(["GET"])
+@api_view(["GET", "DELETE"])
 def get_file(request, file_id):
     """
     GET: Get metadata for a single PdfFile by file_id (UUID).
@@ -90,12 +90,17 @@ def notebooks(request):
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
-@api_view(["GET"])
+@api_view(["GET", "DELETE"])
 def notebook_detail(request, notebook_id):
     """
     Get a single notebook (id, name, created_at).
     """
     notebook = get_object_or_404(Notebook, id=notebook_id, owner=request.user)
+
+    if request.method == "DELETE":
+        notebook.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     serializer = NotebookSerializer(notebook)
     return Response(serializer.data)
 

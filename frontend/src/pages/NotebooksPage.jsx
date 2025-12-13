@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { Trash2 } from "lucide-react";
 
 function NotebooksPage() {
   const [notebooks, setNotebooks] = useState([]);
@@ -46,6 +47,26 @@ function NotebooksPage() {
     }
   };
 
+  const handleDelete = async (id) => {
+    const confirmed = window.confirm(
+      "Delete this notebook? This does not delete your PDFs."
+    );
+    if (!confirmed) return;
+
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
+
+    try {
+      await axios.delete(`/api/files/notebooks/${id}/`, {
+        headers: { Authorization: `Token ${token}` },
+      });
+      setNotebooks((prev) => prev.filter((nb) => nb.id !== id));
+    } catch (e) {
+      console.error(e);
+      alert("Failed to delete notebook.");
+    }
+  };
+
   if (loading) {
     return <div style={{ padding: 24 }}>Loading notebooks...</div>;
   }
@@ -79,7 +100,9 @@ function NotebooksPage() {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
+                cursor: "pointer",
               }}
+              onClick={() => navigate(`/notebooks/${nb.id}`)}
             >
               <div>
                 <div style={{ fontWeight: "bold" }}>{nb.name}</div>
@@ -87,8 +110,23 @@ function NotebooksPage() {
                   {new Date(nb.created_at).toLocaleString()}
                 </div>
               </div>
-              <button onClick={() => navigate(`/notebooks/${nb.id}`)}>
-                Open
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete(nb.id);
+                }}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  cursor: "pointer",
+                  padding: 4,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Trash2 size={14} />
               </button>
             </li>
           ))}
