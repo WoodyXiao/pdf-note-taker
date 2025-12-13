@@ -7,7 +7,7 @@ import TextStyle from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import EditorExtension from "./EditorExtension";
 
-function TextEditor({ fileId }) {
+function TextEditor({ fileId, notebookId }) {
   const editor = useEditor({
     extensions: [
       TextStyle,
@@ -28,9 +28,22 @@ function TextEditor({ fileId }) {
   });
 
   return (
-    <div>
-      <EditorExtension editor={editor} fileId={fileId} />
-      <div style={{ overflow: "auto", height: "88vh", border: "1px solid #eee" }}>
+    <div
+      style={{
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <EditorExtension editor={editor} fileId={fileId} notebookId={notebookId} />
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflow: "auto",
+          border: "1px solid #eee",
+        }}
+      >
         <EditorContent editor={editor} />
       </div>
     </div>

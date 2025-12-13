@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 
-function UploadPdfDialog() {
+function UploadPdfDialog({ onUploaded }) {
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState(null);
   const [fileName, setFileName] = useState("");
@@ -24,6 +24,11 @@ function UploadPdfDialog() {
       });
       toast.success("PDF uploaded and ingested");
       setOpen(false);
+      setFile(null);
+      setFileName("");
+      if (onUploaded) {
+        onUploaded();
+      }
     } catch (e) {
       console.error(e);
       toast.error("Upload failed");
@@ -53,7 +58,13 @@ function UploadPdfDialog() {
         <input
           type="file"
           accept="application/pdf"
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
+          onChange={(e) => {
+            const f = e.target.files?.[0] || null;
+            setFile(f);
+            if (f && !fileName) {
+              setFileName(f.name);
+            }
+          }}
         />
       </div>
       <div style={{ marginTop: 8 }}>

@@ -28,7 +28,7 @@ function LoginPage() {
         localStorage.setItem("authToken", res.data.token);
         localStorage.setItem("currentUser", JSON.stringify(res.data.user));
       }
-      window.location.href = "/dashboard";
+      window.location.href = "/notebooks";
     } catch (err) {
       setError(err.response?.data?.detail || "Something went wrong");
     }
