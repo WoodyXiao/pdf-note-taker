@@ -24,12 +24,13 @@ def ingest_pdf_task(pdf_file_id: int) -> None:
     loader = PyPDFLoader(pdf_file.file.path)
     docs = loader.load()
 
-    splitter = RecursiveCharacterTextSplitter(chunk_size=100, chunk_overlap=20)
+    # Use a slightly larger chunk size so we don't explode the chunk count on big books.
+    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
     split_docs = splitter.split_documents(docs)
 
     # Clean text chunks to avoid NUL bytes and empty strings, which Postgres does not accept.
-    texts = []
-    pages = []
+    texts: list[str] = []
+    pages: list[int | None] = []
     for d in split_docs:
         # Replace NUL characters with spaces and strip
         cleaned = (d.page_content or "").replace("\x00", " ").strip()
@@ -43,6 +44,7 @@ def ingest_pdf_task(pdf_file_id: int) -> None:
                 pages.append(None)
 
     if not texts:
+        # Nothing meaningful extracted from this PDF; just return without creating embeddings.
         return
 
     embeddings_model = GoogleGenerativeAIEmbeddings(
@@ -50,18 +52,26 @@ def ingest_pdf_task(pdf_file_id: int) -> None:
         google_api_key=api_key,
     )
 
-    vectors = embeddings_model.embed_documents(texts)
+    # For very large documents, embed + insert in batches to avoid huge payloads/transactions.
+    BATCH_SIZE = 256
+    total = len(texts)
 
-    DocumentEmbedding.objects.bulk_create(
-        [
-            DocumentEmbedding(
-                file=pdf_file,
-                text=text,
-                embedding=vector,
-                page_number=page,
-            )
-            for text, vector, page in zip(texts, vectors, pages)
-        ]
-    )
+    for start in range(0, total, BATCH_SIZE):
+        batch_texts = texts[start : start + BATCH_SIZE]
+        batch_pages = pages[start : start + BATCH_SIZE]
+
+        vectors = embeddings_model.embed_documents(batch_texts)
+
+        DocumentEmbedding.objects.bulk_create(
+            [
+                DocumentEmbedding(
+                    file=pdf_file,
+                    text=text,
+                    embedding=vector,
+                    page_number=page,
+                )
+                for text, vector, page in zip(batch_texts, vectors, batch_pages)
+            ]
+        )
 
 
