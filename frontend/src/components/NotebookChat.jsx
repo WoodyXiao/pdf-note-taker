@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -6,6 +6,31 @@ function NotebookChat({ notebookId }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // Load recent messages on mount.
+  useEffect(() => {
+    if (!notebookId) return;
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
+
+    axios
+      .get(`/api/files/notebooks/${notebookId}/messages/?channel=notebook_chat`, {
+        headers: { Authorization: `Token ${token}` },
+      })
+      .then((res) => {
+        // Map API shape to local shape
+        const msgs = (res.data || []).map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content_html,
+          createdAt: m.created_at,
+        }));
+        setMessages(msgs);
+      })
+      .catch((err) => {
+        console.error("Failed to load notebook messages", err);
+      });
+  }, [notebookId]);
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -19,14 +44,50 @@ function NotebookChat({ notebookId }) {
     }
 
     // Optimistic add user message
-    setMessages((prev) => [...prev, { role: "user", content: question }]);
+    const tempCreatedAt = new Date().toISOString();
+    const userMessage = { role: "user", content: question, createdAt: tempCreatedAt };
+    setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setLoading(true);
 
     try {
+      // Persist the user message
+      const savedUser = await axios.post(
+        `/api/files/notebooks/${notebookId}/messages/`,
+        {
+          role: "user",
+          channel: "notebook_chat",
+          contentHtml: question,
+        },
+        {
+          headers: {
+            Authorization: `Token ${token}`,
+          },
+        }
+      );
+
+      // Replace the temporary user message with the saved one (to get accurate timestamp)
+      if (savedUser?.data) {
+        setMessages((prev) => {
+          const copy = [...prev];
+          // Replace the last user message (optimistic one)
+          const idx = copy.findIndex(
+            (m, index) => m.role === "user" && index === copy.length - 1
+          );
+          if (idx !== -1) {
+            copy[idx] = {
+              role: "user",
+              content: savedUser.data.content_html || question,
+              createdAt: savedUser.data.created_at,
+            };
+          }
+          return copy;
+        });
+      }
+
       const res = await axios.post(
         "/api/ai/answer/",
-        { question, notebookId },
+        { question, notebookId, channel: "notebook_chat" },
         {
           headers: {
             Authorization: `Token ${token}`,
@@ -34,7 +95,11 @@ function NotebookChat({ notebookId }) {
         }
       );
       const answer = res.data.html || res.data.text || "";
-      setMessages((prev) => [...prev, { role: "ai", content: answer }]);
+      const aiCreatedAt = new Date().toISOString();
+      setMessages((prev) => [
+        ...prev,
+        { role: "ai", content: answer, createdAt: aiCreatedAt },
+      ]);
     } catch (err) {
       console.error(err);
       toast.error("AI request failed");
@@ -117,6 +182,18 @@ function NotebookChat({ notebookId }) {
                 <div
                   dangerouslySetInnerHTML={{ __html: m.content }}
                 />
+                {m.createdAt && (
+                  <div
+                    style={{
+                      marginTop: 4,
+                      fontSize: 11,
+                      color: "#999",
+                      textAlign: "right",
+                    }}
+                  >
+                    {new Date(m.createdAt).toLocaleString()}
+                  </div>
+                )}
               </div>
             </div>
           ))

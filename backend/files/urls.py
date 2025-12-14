@@ -6,6 +6,7 @@ urlpatterns = [
     # PDF files
     path("", views.list_files, name="list_files"),
     path("upload/", views.upload_pdf, name="upload_pdf"),
+    path("events/", views.ingest_events, name="ingest_events"),
     path("<uuid:file_id>/", views.get_file, name="get_file"),
     # Notebooks
     path("notebooks/", views.notebooks, name="notebooks"),
@@ -18,6 +19,16 @@ urlpatterns = [
         "notebooks/<uuid:notebook_id>/",
         views.notebook_detail,
         name="notebook_detail",
+    ),
+    path(
+        "notebooks/<uuid:notebook_id>/content/",
+        views.notebook_content,
+        name="notebook_content",
+    ),
+    path(
+        "notebooks/<uuid:notebook_id>/messages/",
+        views.notebook_messages,
+        name="notebook_messages",
     ),
 ]
 

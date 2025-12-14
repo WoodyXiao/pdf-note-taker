@@ -39,12 +39,34 @@ function EditorExtension({ editor, fileId, notebookId }) {
     toast("AI is getting your answer...");
 
     try {
+      // If we are inside a notebook, persist the user-side question as a chat message
+      if (notebookId) {
+        await axios.post(
+          `/api/files/notebooks/${notebookId}/messages/`,
+          {
+            role: "user",
+            channel: "editor_assist",
+            contentHtml: selectedText,
+            metadata: {
+              selected_text: selectedText,
+            },
+          },
+          {
+            headers: {
+              Authorization: `Token ${token}`,
+            },
+          }
+        );
+      }
+
       const res = await axios.post(
         "/api/ai/answer/",
         {
           question: selectedText,
           // Prefer notebook-level RAG when notebookId is provided.
           ...(notebookId ? { notebookId } : { fileId }),
+          channel: "editor_assist",
+          selectedText,
         },
         {
           headers: {

@@ -3,8 +3,9 @@ import { useParams } from "react-router-dom";
 import axios from "axios";
 import TextEditor from "../components/TextEditor";
 import NotebookChat from "../components/NotebookChat";
-import { Trash2 } from "lucide-react";
+import { Trash2, Loader2 } from "lucide-react";
 import UploadPdfDialog from "../shared/UploadPdfDialog";
+import { toast } from "sonner";
 
 function NotebookPage() {
   const { notebookId } = useParams();
@@ -38,6 +39,7 @@ function NotebookPage() {
         setPreviewFileId(initialPreview);
       } catch (e) {
         console.error(e);
+        toast.error("Failed to load notebook");
       } finally {
         setLoading(false);
       }
@@ -73,8 +75,45 @@ function NotebookPage() {
       }
     } catch (e) {
       console.error(e);
+      toast.error("Failed to refresh files");
     }
   };
+
+  // Subscribe to ingest status updates via SSE.
+  useEffect(() => {
+    if (!token) return;
+
+    const es = new EventSource("/api/files/events/");
+
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type !== "pdf_ingested") return;
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.file_id === data.file_id
+              ? {
+                  ...f,
+                  is_ingested: data.is_ingested,
+                  ingest_error: data.ingest_error,
+                }
+              : f
+          )
+        );
+      } catch (e) {
+        console.error("Failed to handle ingest_events SSE", e);
+      }
+    };
+
+    es.onerror = (err) => {
+      console.error("SSE connection error (NotebookPage)", err);
+      es.close();
+    };
+
+    return () => {
+      es.close();
+    };
+  }, [token]);
 
   const updateNotebookSelection = async (newSelected) => {
     setSelectedFileIds(newSelected);
@@ -86,6 +125,7 @@ function NotebookPage() {
       );
     } catch (e) {
       console.error(e);
+      toast.error("Failed to update notebook files");
     }
   };
 
@@ -133,7 +173,7 @@ function NotebookPage() {
       }
     } catch (e) {
       console.error(e);
-      alert("Failed to delete PDF.");
+      toast.error("Failed to delete PDF");
     }
   };
 
@@ -223,6 +263,7 @@ function NotebookPage() {
             <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
               {files.map((f) => {
                 const checked = selectedFileIds.includes(f.file_id);
+                const isProcessing = f.is_ingested === false;
                 return (
                   <li
                     key={f.file_id}
@@ -235,11 +276,17 @@ function NotebookPage() {
                       cursor: "pointer",
                     }}
                     onClick={() => setPreviewFileId(f.file_id)}
+                    title={
+                      isProcessing
+                        ? "Embedding in progress for this PDF..."
+                        : undefined
+                    }
                   >
                     <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <input
                         type="checkbox"
                         checked={checked}
+                        disabled={isProcessing}
                         onClick={(e) => e.stopPropagation()}
                         onChange={() => handleToggleFile(f.file_id)}
                       />
@@ -255,6 +302,17 @@ function NotebookPage() {
                         </span>
                       </div>
                     </label>
+                    {isProcessing && (
+                      <Loader2
+                        size={14}
+                        className="spin"
+                        style={{
+                          marginRight: 4,
+                          color: "#999",
+                          animation: "spin 1s linear infinite",
+                        }}
+                      />
+                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

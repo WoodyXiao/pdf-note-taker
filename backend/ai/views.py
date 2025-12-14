@@ -10,7 +10,7 @@ from rest_framework.response import Response
 
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 
-from files.models import DocumentEmbedding, Notebook, NotebookPdf, PdfFile
+from files.models import ChatMessage, DocumentEmbedding, Notebook, NotebookPdf, PdfFile
 
 
 @api_view(["POST"])
@@ -24,6 +24,8 @@ def answer(request):
     """
     question = request.data.get("question", "").strip()
     notebook_id = request.data.get("notebookId")
+    channel = request.data.get("channel") or ChatMessage.CHANNEL_NOTEBOOK_CHAT
+    selected_text = request.data.get("selectedText")
     file_id = request.data.get("fileId")  # legacy support
 
     if not question:
@@ -48,6 +50,8 @@ def answer(request):
 
     # 2. Determine which PDF files to search over
     files_qs = None
+
+    notebook = None
 
     if notebook_id:
         # New behavior: use all files attached to the given notebook that belong to the user.
@@ -178,6 +182,27 @@ def answer(request):
         sources_html = "".join(parts)
 
     final_html = cleaned + sources_html
+
+    # 6. Persist AI message (and optionally metadata) when we are in a notebook.
+    if notebook is not None:
+        sources_meta = []
+        for file_name, meta in sources_by_file.items():
+            entry = {"file_name": file_name}
+            if meta["has_page"]:
+                entry["pages"] = sorted(meta["pages"])
+            sources_meta.append(entry)
+
+        ChatMessage.objects.create(
+            notebook=notebook,
+            role="ai",
+            channel=channel,
+            content_html=final_html,
+            metadata={
+                "question": question,
+                "selected_text": selected_text,
+                "sources": sources_meta,
+            },
+        )
 
     return Response({"html": final_html})
 

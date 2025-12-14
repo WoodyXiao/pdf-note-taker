@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import UploadPdfDialog from "../shared/UploadPdfDialog";
-import { Trash2 } from "lucide-react";
+import { Trash2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 function PdfLibraryPage() {
   const [files, setFiles] = useState([]);
@@ -23,6 +24,7 @@ function PdfLibraryPage() {
       setFiles(res.data);
     } catch (e) {
       console.error(e);
+      toast.error("Failed to load PDFs");
     } finally {
       setLoading(false);
     }
@@ -32,6 +34,41 @@ function PdfLibraryPage() {
     loadFiles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Subscribe to ingest status updates via SSE.
+  useEffect(() => {
+    if (!token) return;
+
+    const es = new EventSource("/api/files/events/");
+
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type !== "pdf_ingested") return;
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.file_id === data.file_id
+              ? {
+                  ...f,
+                  is_ingested: data.is_ingested,
+                  ingest_error: data.ingest_error,
+                }
+              : f
+          )
+        );
+      } catch (e) {
+        console.error("Failed to handle ingest_events SSE", e);
+      }
+    };
+
+    es.onerror = (err) => {
+      console.error("SSE connection error (PdfLibraryPage)", err);
+      es.close();
+    };
+
+    return () => {
+      es.close();
+    };
+  }, [token]);
 
   const handleDeleteFile = async (fileId) => {
     const confirmed = window.confirm(
@@ -47,7 +84,7 @@ function PdfLibraryPage() {
       setFiles((prev) => prev.filter((f) => f.file_id !== fileId));
     } catch (e) {
       console.error(e);
-      alert("Failed to delete PDF.");
+      toast.error("Failed to delete PDF");
     }
   };
 
@@ -121,6 +158,15 @@ function PdfLibraryPage() {
                     borderBottom: "1px solid #eee",
                   }}
                 >
+                  Status
+                </th>
+                <th
+                  style={{
+                    textAlign: "left",
+                    padding: "8px 4px",
+                    borderBottom: "1px solid #eee",
+                  }}
+                >
                   Actions
                 </th>
               </tr>
@@ -145,6 +191,33 @@ function PdfLibraryPage() {
                     }}
                   >
                     {new Date(f.created_at).toLocaleString()}
+                  </td>
+                  <td
+                    style={{
+                      padding: "6px 4px",
+                      borderBottom: "1px solid #f5f5f5",
+                    }}
+                  >
+                    {f.is_ingested === false ? (
+                      <span
+                        title="Embedding in progress..."
+                        style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
+                      >
+                        <Loader2
+                          size={14}
+                          style={{
+                            animation: "spin 1s linear infinite",
+                          }}
+                        />
+                        Processing
+                      </span>
+                    ) : f.ingest_error ? (
+                      <span style={{ color: "#c00", fontSize: 12 }} title={f.ingest_error}>
+                        Failed
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 12, color: "#4caf50" }}>Ready</span>
+                    )}
                   </td>
                   <td
                     style={{

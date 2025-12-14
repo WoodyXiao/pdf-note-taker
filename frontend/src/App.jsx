@@ -16,8 +16,8 @@ function App() {
     <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
       <TopNav />
       <div style={{ flex: 1, minHeight: 0 }}>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
 
           {/* Notebook-based experience */}
           <Route path="/notebooks" element={requireAuth(<NotebooksPage />)} />
@@ -27,17 +27,17 @@ function App() {
           />
 
           {/* Global PDF library */}
-          <Route
+      <Route
             path="/pdfs"
             element={requireAuth(<PdfLibraryPage />)}
-          />
+      />
 
           {/* Default route */}
-          <Route
+      <Route
             path="*"
             element={<Navigate to={token ? "/notebooks" : "/login"} replace />}
-          />
-        </Routes>
+      />
+    </Routes>
       </div>
     </div>
   );
