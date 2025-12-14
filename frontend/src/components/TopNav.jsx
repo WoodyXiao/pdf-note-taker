@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { toast } from "sonner";
 
 function TopNav() {
   const navigate = useNavigate();
@@ -9,6 +10,7 @@ function TopNav() {
   const handleLogout = () => {
     localStorage.removeItem("authToken");
     localStorage.removeItem("currentUser");
+    toast.success("Logged out");
     navigate("/login");
   };
 
@@ -47,6 +49,12 @@ function TopNav() {
               style={{ textDecoration: "none", color: "#333" }}
             >
               PDFs
+            </Link>
+            <Link
+              to="/activity"
+              style={{ textDecoration: "none", color: "#333" }}
+            >
+              Activity
             </Link>
           </>
         )}

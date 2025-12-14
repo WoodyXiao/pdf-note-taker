@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 function LoginPage() {
   const [username, setUsername] = useState("");
@@ -7,6 +9,7 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [isRegister, setIsRegister] = useState(false);
   const [error, setError] = useState("");
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -20,6 +23,7 @@ function LoginPage() {
         });
         localStorage.setItem("authToken", res.data.token);
         localStorage.setItem("currentUser", JSON.stringify(res.data.user));
+        toast.success("Registered and logged in successfully");
       } else {
         const res = await axios.post("/api/auth/login/", {
           username,
@@ -27,10 +31,13 @@ function LoginPage() {
         });
         localStorage.setItem("authToken", res.data.token);
         localStorage.setItem("currentUser", JSON.stringify(res.data.user));
+        toast.success("Logged in successfully");
       }
-      window.location.href = "/notebooks";
+      navigate("/notebooks", { replace: true });
     } catch (err) {
-      setError(err.response?.data?.detail || "Something went wrong");
+      const msg = err.response?.data?.detail || "Something went wrong";
+      setError(msg);
+      toast.error(msg);
     }
   };
 

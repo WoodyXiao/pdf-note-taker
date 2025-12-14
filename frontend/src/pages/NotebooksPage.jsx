@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 function NotebooksPage() {
   const [notebooks, setNotebooks] = useState([]);
@@ -42,6 +43,7 @@ function NotebooksPage() {
       navigate(`/notebooks/${res.data.id}`);
     } catch (e) {
       console.error(e);
+      toast.error("Failed to create notebook");
     } finally {
       setCreating(false);
     }
@@ -63,7 +65,7 @@ function NotebooksPage() {
       setNotebooks((prev) => prev.filter((nb) => nb.id !== id));
     } catch (e) {
       console.error(e);
-      alert("Failed to delete notebook.");
+      toast.error("Failed to delete notebook");
     }
   };
 

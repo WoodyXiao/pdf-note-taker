@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect } from "react";
+import axios from "axios";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Highlight from "@tiptap/extension-highlight";
@@ -26,6 +27,81 @@ function TextEditor({ fileId, notebookId }) {
       },
     },
   });
+
+  // Load existing notebook content on mount.
+  useEffect(() => {
+    if (!editor || !notebookId) return;
+
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
+
+    axios
+      .get(`/api/files/notebooks/${notebookId}/content/`, {
+        headers: { Authorization: `Token ${token}` },
+      })
+      .then((res) => {
+        const pages = res.data?.pages || [];
+        const first = pages[0];
+        if (first && first.content) {
+          editor.commands.setContent(first.content);
+        } else {
+          editor.commands.clearContent();
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load notebook content", err);
+      });
+  }, [editor, notebookId]);
+
+  // Autosave content with a small debounce.
+  useEffect(() => {
+    if (!editor || !notebookId) return;
+
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
+
+    let timer = null;
+
+    const save = () => {
+      const json = editor.getJSON();
+      axios
+        .put(
+          `/api/files/notebooks/${notebookId}/content/`,
+          {
+            pages: [
+              {
+                title: "Main",
+                order_index: 0,
+                content: json,
+              },
+            ],
+          },
+          {
+            headers: { Authorization: `Token ${token}` },
+          }
+        )
+        .catch((err) => {
+          console.error("Failed to save notebook content", err);
+        });
+    };
+
+    const onUpdate = () => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+      // Save 2s after the last change.
+      timer = setTimeout(save, 2000);
+    };
+
+    editor.on("update", onUpdate);
+
+    return () => {
+      editor.off("update", onUpdate);
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [editor, notebookId]);
 
   return (
     <div

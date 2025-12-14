@@ -4,6 +4,7 @@ import LoginPage from "./pages/LoginPage";
 import NotebooksPage from "./pages/NotebooksPage";
 import NotebookPage from "./pages/NotebookPage";
 import PdfLibraryPage from "./pages/PdfLibraryPage";
+import ActivityPage from "./pages/ActivityPage";
 import TopNav from "./components/TopNav";
 
 function App() {
@@ -30,6 +31,12 @@ function App() {
           <Route
             path="/pdfs"
             element={requireAuth(<PdfLibraryPage />)}
+          />
+
+          {/* Activity log */}
+          <Route
+            path="/activity"
+            element={requireAuth(<ActivityPage />)}
           />
 
           {/* Default route */}

@@ -5,6 +5,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from files.models import ActivityLog
+from files.utils import log_activity
 from .serializers import RegisterSerializer, UserSerializer
 
 
@@ -15,6 +17,7 @@ def register(request):
     if serializer.is_valid():
         user = serializer.save()
         token, _ = Token.objects.get_or_create(user=user)
+        log_activity(user=user, action_type=ActivityLog.ACTION_LOGIN)
         return Response(
             {"token": token.key, "user": UserSerializer(user).data},
             status=status.HTTP_201_CREATED,
@@ -33,6 +36,7 @@ def login(request):
             {"detail": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST
         )
     token, _ = Token.objects.get_or_create(user=user)
+    log_activity(user=user, action_type=ActivityLog.ACTION_LOGIN)
     return Response(
         {"token": token.key, "user": UserSerializer(user).data},
         status=status.HTTP_200_OK,
