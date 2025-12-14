@@ -125,3 +125,40 @@ class ChatMessage(models.Model):
         return f"{self.notebook} [{self.channel}] {self.role}@{self.created_at}"
 
 
+class ActivityLog(models.Model):
+    """Simple user-scoped activity log for auditing and timeline views."""
+
+    ACTION_UPLOAD_PDF = "upload_pdf"
+    ACTION_DELETE_PDF = "delete_pdf"
+    ACTION_CREATE_NOTEBOOK = "create_notebook"
+    ACTION_DELETE_NOTEBOOK = "delete_notebook"
+    ACTION_LOGIN = "login"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="activities",
+    )
+    action_type = models.CharField(max_length=64)
+
+    # Generic target reference for display / filtering.
+    target_type = models.CharField(max_length=64, blank=True)
+    target_id = models.CharField(max_length=64, blank=True)
+    target_name = models.CharField(max_length=255, blank=True)
+
+    # Extra structured data (e.g. file size, notebook id, ip, etc.)
+    metadata = models.JSONField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "created_at"]),
+            models.Index(fields=["user", "action_type"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user} {self.action_type} {self.target_name} @ {self.created_at}"
+
+

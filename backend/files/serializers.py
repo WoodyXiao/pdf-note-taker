@@ -1,11 +1,6 @@
 from rest_framework import serializers
 
-from .models import (
-    ChatMessage,
-    Notebook,
-    NotebookPage,
-    PdfFile,
-)
+from .models import ActivityLog, ChatMessage, Notebook, NotebookPage, PdfFile
 
 
 class PdfFileSerializer(serializers.ModelSerializer):
@@ -60,4 +55,17 @@ class ChatMessageSerializer(serializers.ModelSerializer):
             "created_at",
         ]
 
+
+class ActivityLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ActivityLog
+        fields = [
+            "id",
+            "action_type",
+            "target_type",
+            "target_id",
+            "target_name",
+            "metadata",
+            "created_at",
+        ]
 

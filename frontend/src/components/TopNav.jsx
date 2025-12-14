@@ -50,6 +50,12 @@ function TopNav() {
             >
               PDFs
             </Link>
+            <Link
+              to="/activity"
+              style={{ textDecoration: "none", color: "#333" }}
+            >
+              Activity
+            </Link>
           </>
         )}
       </nav>

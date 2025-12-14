@@ -11,8 +11,9 @@ from rest_framework.response import Response
 
 from celery import current_app as celery_app
 
-from .models import ChatMessage, Notebook, NotebookPage, NotebookPdf, PdfFile
+from .models import ActivityLog, ChatMessage, Notebook, NotebookPage, NotebookPdf, PdfFile
 from .serializers import (
+    ActivityLogSerializer,
     ChatMessageSerializer,
     NotebookContentSerializer,
     NotebookPageSerializer,
@@ -20,6 +21,7 @@ from .serializers import (
     PdfFileSerializer,
 )
 from .tasks import ingest_pdf_task
+from .utils import log_activity
 
 
 @api_view(["POST"])
@@ -47,6 +49,14 @@ def upload_pdf(request):
     # Remember the task id so we can cancel it if the PDF is deleted.
     pdf_file.ingest_task_id = async_result.id
     pdf_file.save(update_fields=["ingest_task_id"])
+
+    # Log activity
+    log_activity(
+        user=user,
+        action_type=ActivityLog.ACTION_UPLOAD_PDF,
+        target=pdf_file,
+        metadata={"size_bytes": file_obj.size},
+    )
 
     serializer = PdfFileSerializer(pdf_file)
     data = serializer.data
@@ -84,6 +94,13 @@ def get_file(request, file_id):
             except Exception:
                 # Cancellation is best-effort only; deletion should still proceed.
                 pass
+
+        # Log before delete so we still have target info
+        log_activity(
+            user=request.user,
+            action_type=ActivityLog.ACTION_DELETE_PDF,
+            target=pdf_file,
+        )
         pdf_file.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -109,6 +126,11 @@ def notebooks(request):
     # POST
     name = request.data.get("name") or "Untitled Notebook"
     notebook = Notebook.objects.create(owner=user, name=name)
+    log_activity(
+        user=user,
+        action_type=ActivityLog.ACTION_CREATE_NOTEBOOK,
+        target=notebook,
+    )
     serializer = NotebookSerializer(notebook)
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -121,6 +143,11 @@ def notebook_detail(request, notebook_id):
     notebook = get_object_or_404(Notebook, id=notebook_id, owner=request.user)
 
     if request.method == "DELETE":
+        log_activity(
+            user=request.user,
+            action_type=ActivityLog.ACTION_DELETE_NOTEBOOK,
+            target=notebook,
+        )
         notebook.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -308,4 +335,34 @@ def ingest_events(request):
     response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
     response["Cache-Control"] = "no-cache"
     return response
+
+
+@api_view(["GET"])
+def activity_list(request):
+    """
+    Return recent activity logs for the current user.
+
+    Optional query parameters:
+      - actionType: filter by action_type
+      - limit: max number of records (default 50)
+      - offset: pagination offset (default 0)
+    """
+    user = request.user
+    qs = ActivityLog.objects.filter(user=user)
+
+    action_type = request.query_params.get("actionType")
+    if action_type:
+        qs = qs.filter(action_type=action_type)
+
+    try:
+        limit = int(request.query_params.get("limit", "50"))
+        offset = int(request.query_params.get("offset", "0"))
+    except ValueError:
+        limit, offset = 50, 0
+
+    total = qs.count()
+    logs = qs.order_by("-created_at")[offset : offset + limit]
+
+    serializer = ActivityLogSerializer(logs, many=True)
+    return Response({"total": total, "results": serializer.data})
 

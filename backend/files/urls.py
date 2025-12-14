@@ -8,6 +8,7 @@ urlpatterns = [
     path("upload/", views.upload_pdf, name="upload_pdf"),
     path("events/", views.ingest_events, name="ingest_events"),
     path("<uuid:file_id>/", views.get_file, name="get_file"),
+    path("activity/", views.activity_list, name="activity_list"),
     # Notebooks
     path("notebooks/", views.notebooks, name="notebooks"),
     path(
