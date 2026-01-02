@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import UploadPdfDialog from "../shared/UploadPdfDialog";
-import { Trash2, Loader2 } from "lucide-react";
+import { Trash2, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 function PdfLibraryPage() {
@@ -89,6 +89,21 @@ function PdfLibraryPage() {
     } catch (e) {
       console.error(e);
       toast.error("Failed to delete PDF");
+    }
+  };
+
+  const handleRetryIngest = async (fileId) => {
+    if (!token) return;
+    try {
+      toast("Retrying embedding...");
+      const res = await axios.post(`/api/files/${fileId}/reingest/`, null, { headers });
+      const updated = res.data;
+      setFiles((prev) =>
+        prev.map((f) => (f.file_id === fileId ? { ...f, ...updated } : f))
+      );
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to retry embedding");
     }
   };
 
@@ -239,6 +254,25 @@ function PdfLibraryPage() {
                       borderBottom: "1px solid #f5f5f5",
                     }}
                   >
+                    {f.ingest_status === "failed" && (
+                      <button
+                        type="button"
+                        onClick={() => handleRetryIngest(f.file_id)}
+                        title="Retry embedding"
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          cursor: "pointer",
+                          padding: 4,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          marginLeft: 6,
+                        }}
+                      >
+                        <RotateCcw size={14} />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => handleDeleteFile(f.file_id)}
@@ -250,6 +284,7 @@ function PdfLibraryPage() {
                         display: "inline-flex",
                         alignItems: "center",
                         justifyContent: "center",
+                        marginLeft: f.ingest_status === "failed" ? 6 : 0,
                       }}
                     >
                       <Trash2 size={14} />

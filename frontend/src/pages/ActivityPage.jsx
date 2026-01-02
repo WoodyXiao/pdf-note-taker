@@ -5,6 +5,7 @@ import { toast } from "sonner";
 const ACTION_LABELS = {
   upload_pdf: "Uploaded PDF",
   delete_pdf: "Deleted PDF",
+  reingest_pdf: "Retried embedding",
   create_notebook: "Created notebook",
   delete_notebook: "Deleted notebook",
   login: "Logged in",

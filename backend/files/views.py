@@ -230,6 +230,72 @@ def get_file(request, file_id):
     return Response(data)
 
 
+@api_view(["POST"])
+def reingest_file(request, file_id):
+    """
+    Manually re-run ingest for an existing PDF without re-uploading.
+
+    Behavior:
+    - Best-effort revoke any running task
+    - Delete existing embeddings
+    - Reset ingest state/progress
+    - Enqueue a new Celery ingest task
+    """
+    pdf_file = get_object_or_404(PdfFile, file_id=file_id, created_by=request.user)
+
+    # Best-effort cancel any currently running task.
+    if pdf_file.ingest_task_id:
+        try:
+            celery_app.control.revoke(pdf_file.ingest_task_id, terminate=True)
+        except Exception:
+            pass
+
+    # Clean old embeddings so we don't mix old+new runs.
+    try:
+        DocumentEmbedding.objects.filter(file=pdf_file).delete()
+    except Exception:
+        pass
+
+    # Reset state
+    pdf_file.is_ingested = False
+    pdf_file.ingest_error = None
+    pdf_file.ingest_status = PdfFile.INGEST_PENDING
+    pdf_file.ingest_progress = 0
+    pdf_file.ingest_done_chunks = 0
+    pdf_file.ingest_total_chunks = None
+    pdf_file.ingest_started_at = None
+    pdf_file.ingest_finished_at = None
+    pdf_file.save(
+        update_fields=[
+            "is_ingested",
+            "ingest_error",
+            "ingest_status",
+            "ingest_progress",
+            "ingest_done_chunks",
+            "ingest_total_chunks",
+            "ingest_started_at",
+            "ingest_finished_at",
+        ]
+    )
+
+    async_result = ingest_pdf_task.delay(pdf_file.id)
+    pdf_file.ingest_task_id = async_result.id
+    pdf_file.save(update_fields=["ingest_task_id"])
+
+    log_activity(
+        user=request.user,
+        action_type=ActivityLog.ACTION_REINGEST_PDF,
+        target=pdf_file,
+        metadata={"manual": True},
+    )
+
+    serializer = PdfFileSerializer(pdf_file)
+    data = serializer.data
+    data["file_url"] = request.build_absolute_uri(pdf_file.file.url)
+    data["reingesting"] = True
+    return Response(data, status=status.HTTP_200_OK)
+
+
 @api_view(["GET", "POST"])
 def notebooks(request):
     """

@@ -170,6 +170,7 @@ class ActivityLog(models.Model):
 
     ACTION_UPLOAD_PDF = "upload_pdf"
     ACTION_DELETE_PDF = "delete_pdf"
+    ACTION_REINGEST_PDF = "reingest_pdf"
     ACTION_CREATE_NOTEBOOK = "create_notebook"
     ACTION_DELETE_NOTEBOOK = "delete_notebook"
     ACTION_LOGIN = "login"

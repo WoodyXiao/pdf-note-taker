@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import axios from "axios";
 import TextEditor from "../components/TextEditor";
 import NotebookChat from "../components/NotebookChat";
-import { Trash2, Loader2 } from "lucide-react";
+import { Trash2, Loader2, RotateCcw } from "lucide-react";
 import UploadPdfDialog from "../shared/UploadPdfDialog";
 import { toast } from "sonner";
 
@@ -181,6 +181,25 @@ function NotebookPage() {
     }
   };
 
+  const handleRetryIngest = async (fileId) => {
+    if (!token) return;
+    try {
+      toast("Retrying embedding...");
+      const res = await axios.post(
+        `/api/files/${fileId}/reingest/`,
+        null,
+        { headers }
+      );
+      const updated = res.data;
+      setFiles((prev) =>
+        prev.map((f) => (f.file_id === fileId ? { ...f, ...updated } : f))
+      );
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to retry embedding");
+    }
+  };
+
   if (loading) {
     return <div style={{ padding: 24 }}>Loading notebook...</div>;
   }
@@ -333,6 +352,23 @@ function NotebookPage() {
                           animation: "spin 1s linear infinite",
                         }}
                       />
+                    )}
+                    {f.ingest_status === "failed" && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRetryIngest(f.file_id);
+                        }}
+                        title="Retry embedding"
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          cursor: "pointer",
+                          padding: 4,
+                        }}
+                      >
+                        <RotateCcw size={14} />
+                      </button>
                     )}
                     <button
                       onClick={(e) => {
