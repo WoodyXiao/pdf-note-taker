@@ -2,6 +2,7 @@ import json
 import os
 
 import redis
+from django.db import IntegrityError
 from django.http import StreamingHttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import status
@@ -11,7 +12,15 @@ from rest_framework.response import Response
 
 from celery import current_app as celery_app
 
-from .models import ActivityLog, ChatMessage, Notebook, NotebookPage, NotebookPdf, PdfFile
+from .models import (
+    ActivityLog,
+    ChatMessage,
+    DocumentEmbedding,
+    Notebook,
+    NotebookPage,
+    NotebookPdf,
+    PdfFile,
+)
 from .serializers import (
     ActivityLogSerializer,
     ChatMessageSerializer,
@@ -38,11 +47,115 @@ def upload_pdf(request):
             {"detail": "No file provided"}, status=status.HTTP_400_BAD_REQUEST
         )
 
-    pdf_file = PdfFile.objects.create(
-        file=file_obj,
-        file_name=file_name,
-        created_by=user,
+    # Compute content fingerprint for per-user dedup (streaming, no full file load).
+    import hashlib
+
+    sha256 = hashlib.sha256()
+    for chunk in file_obj.chunks():
+        sha256.update(chunk)
+    content_sha256 = sha256.hexdigest()
+
+    # Reset the stream so Django can save it to storage.
+    try:
+        file_obj.seek(0)
+    except Exception:
+        pass
+
+    existing = (
+        PdfFile.objects.filter(
+            created_by=user,
+            content_sha256=content_sha256,
+        )
+        .order_by("-created_at")
+        .first()
     )
+
+    # C: exists but previously failed -> auto retry ingest
+    if existing and existing.ingest_error:
+        # Best-effort cleanup of old embeddings (avoid mixing old + new).
+        try:
+            DocumentEmbedding.objects.filter(file=existing).delete()
+        except Exception:
+            pass
+
+        existing.is_ingested = False
+        existing.ingest_error = None
+        try:
+            existing.ingest_status = PdfFile.INGEST_PENDING
+            existing.ingest_progress = 0
+            existing.ingest_done_chunks = 0
+            existing.ingest_total_chunks = None
+            existing.ingest_started_at = None
+            existing.ingest_finished_at = None
+        except Exception:
+            pass
+        existing.save(update_fields=["is_ingested", "ingest_error"])
+        try:
+            existing.save(
+                update_fields=[
+                    "ingest_status",
+                    "ingest_progress",
+                    "ingest_done_chunks",
+                    "ingest_total_chunks",
+                    "ingest_started_at",
+                    "ingest_finished_at",
+                ]
+            )
+        except Exception:
+            pass
+
+        async_result = ingest_pdf_task.delay(existing.id)
+        existing.ingest_task_id = async_result.id
+        existing.save(update_fields=["ingest_task_id"])
+
+        serializer = PdfFileSerializer(existing)
+        data = serializer.data
+        data["file_url"] = request.build_absolute_uri(existing.file.url)
+        data["deduped"] = True
+        data["reingesting"] = True
+        return Response(data, status=status.HTTP_200_OK)
+
+    # A/B: exists and not failed (either ready or still processing) -> reuse without re-trigger
+    if existing and not existing.ingest_error:
+        # If we somehow have no task id and it's still marked processing, kick it once (best-effort).
+        if existing.is_ingested is False and not existing.ingest_task_id:
+            async_result = ingest_pdf_task.delay(existing.id)
+            existing.ingest_task_id = async_result.id
+            existing.save(update_fields=["ingest_task_id"])
+
+        serializer = PdfFileSerializer(existing)
+        data = serializer.data
+        data["file_url"] = request.build_absolute_uri(existing.file.url)
+        data["deduped"] = True
+        return Response(data, status=status.HTTP_200_OK)
+
+    # Not found -> create a new PdfFile (handle races via unique constraint).
+    try:
+        pdf_file = PdfFile.objects.create(
+            file=file_obj,
+            file_name=file_name,
+            created_by=user,
+            content_sha256=content_sha256,
+            size_bytes=getattr(file_obj, "size", None),
+            ingest_status=PdfFile.INGEST_PENDING,
+            ingest_progress=0,
+        )
+    except IntegrityError:
+        pdf_file = (
+            PdfFile.objects.filter(
+                created_by=user,
+                content_sha256=content_sha256,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if pdf_file is None:
+            raise
+        serializer = PdfFileSerializer(pdf_file)
+        data = serializer.data
+        data["file_url"] = request.build_absolute_uri(pdf_file.file.url)
+        data["deduped"] = True
+        return Response(data, status=status.HTTP_200_OK)
 
     # Ingest PDF into vector store asynchronously via Celery
     async_result = ingest_pdf_task.delay(pdf_file.id)
@@ -95,6 +208,13 @@ def get_file(request, file_id):
                 # Cancellation is best-effort only; deletion should still proceed.
                 pass
 
+        # Best-effort: delete embeddings immediately to avoid leaving partial data around.
+        # (CASCADE on PdfFile delete will also remove these, but explicit cleanup is faster/clearer.)
+        try:
+            DocumentEmbedding.objects.filter(file=pdf_file).delete()
+        except Exception:
+            pass
+
         # Log before delete so we still have target info
         log_activity(
             user=request.user,
@@ -108,6 +228,72 @@ def get_file(request, file_id):
     data = serializer.data
     data["file_url"] = request.build_absolute_uri(pdf_file.file.url)
     return Response(data)
+
+
+@api_view(["POST"])
+def reingest_file(request, file_id):
+    """
+    Manually re-run ingest for an existing PDF without re-uploading.
+
+    Behavior:
+    - Best-effort revoke any running task
+    - Delete existing embeddings
+    - Reset ingest state/progress
+    - Enqueue a new Celery ingest task
+    """
+    pdf_file = get_object_or_404(PdfFile, file_id=file_id, created_by=request.user)
+
+    # Best-effort cancel any currently running task.
+    if pdf_file.ingest_task_id:
+        try:
+            celery_app.control.revoke(pdf_file.ingest_task_id, terminate=True)
+        except Exception:
+            pass
+
+    # Clean old embeddings so we don't mix old+new runs.
+    try:
+        DocumentEmbedding.objects.filter(file=pdf_file).delete()
+    except Exception:
+        pass
+
+    # Reset state
+    pdf_file.is_ingested = False
+    pdf_file.ingest_error = None
+    pdf_file.ingest_status = PdfFile.INGEST_PENDING
+    pdf_file.ingest_progress = 0
+    pdf_file.ingest_done_chunks = 0
+    pdf_file.ingest_total_chunks = None
+    pdf_file.ingest_started_at = None
+    pdf_file.ingest_finished_at = None
+    pdf_file.save(
+        update_fields=[
+            "is_ingested",
+            "ingest_error",
+            "ingest_status",
+            "ingest_progress",
+            "ingest_done_chunks",
+            "ingest_total_chunks",
+            "ingest_started_at",
+            "ingest_finished_at",
+        ]
+    )
+
+    async_result = ingest_pdf_task.delay(pdf_file.id)
+    pdf_file.ingest_task_id = async_result.id
+    pdf_file.save(update_fields=["ingest_task_id"])
+
+    log_activity(
+        user=request.user,
+        action_type=ActivityLog.ACTION_REINGEST_PDF,
+        target=pdf_file,
+        metadata={"manual": True},
+    )
+
+    serializer = PdfFileSerializer(pdf_file)
+    data = serializer.data
+    data["file_url"] = request.build_absolute_uri(pdf_file.file.url)
+    data["reingesting"] = True
+    return Response(data, status=status.HTTP_200_OK)
 
 
 @api_view(["GET", "POST"])

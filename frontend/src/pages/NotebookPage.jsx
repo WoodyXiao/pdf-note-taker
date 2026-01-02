@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import axios from "axios";
 import TextEditor from "../components/TextEditor";
 import NotebookChat from "../components/NotebookChat";
-import { Trash2, Loader2 } from "lucide-react";
+import { Trash2, Loader2, RotateCcw } from "lucide-react";
 import UploadPdfDialog from "../shared/UploadPdfDialog";
 import { toast } from "sonner";
 
@@ -96,6 +96,10 @@ function NotebookPage() {
                   ...f,
                   is_ingested: data.is_ingested,
                   ingest_error: data.ingest_error,
+                  ...(data.ingest_status != null ? { ingest_status: data.ingest_status } : {}),
+                  ...(data.ingest_progress != null ? { ingest_progress: data.ingest_progress } : {}),
+                  ...(data.ingest_done_chunks != null ? { ingest_done_chunks: data.ingest_done_chunks } : {}),
+                  ...(data.ingest_total_chunks != null ? { ingest_total_chunks: data.ingest_total_chunks } : {}),
                 }
               : f
           )
@@ -174,6 +178,25 @@ function NotebookPage() {
     } catch (e) {
       console.error(e);
       toast.error("Failed to delete PDF");
+    }
+  };
+
+  const handleRetryIngest = async (fileId) => {
+    if (!token) return;
+    try {
+      toast("Retrying embedding...");
+      const res = await axios.post(
+        `/api/files/${fileId}/reingest/`,
+        null,
+        { headers }
+      );
+      const updated = res.data;
+      setFiles((prev) =>
+        prev.map((f) => (f.file_id === fileId ? { ...f, ...updated } : f))
+      );
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to retry embedding");
     }
   };
 
@@ -263,7 +286,14 @@ function NotebookPage() {
             <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
               {files.map((f) => {
                 const checked = selectedFileIds.includes(f.file_id);
-                const isProcessing = f.is_ingested === false;
+                const isProcessing =
+                  f.is_ingested === false ||
+                  f.ingest_status === "pending" ||
+                  f.ingest_status === "running";
+                const showPercent =
+                  isProcessing &&
+                  f.ingest_total_chunks != null &&
+                  typeof f.ingest_progress === "number";
                 return (
                   <li
                     key={f.file_id}
@@ -300,6 +330,16 @@ function NotebookPage() {
                         >
                           {new Date(f.created_at).toLocaleString()}
                         </span>
+                        {isProcessing && f.ingest_total_chunks == null ? (
+                          <span style={{ fontSize: 11, color: "#888" }}>
+                            Preparing…
+                          </span>
+                        ) : null}
+                        {showPercent ? (
+                          <span style={{ fontSize: 11, color: "#888" }}>
+                            Processing ({f.ingest_progress}%)
+                          </span>
+                        ) : null}
                       </div>
                     </label>
                     {isProcessing && (
@@ -312,6 +352,23 @@ function NotebookPage() {
                           animation: "spin 1s linear infinite",
                         }}
                       />
+                    )}
+                    {f.ingest_status === "failed" && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRetryIngest(f.file_id);
+                        }}
+                        title="Retry embedding"
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          cursor: "pointer",
+                          padding: 4,
+                        }}
+                      >
+                        <RotateCcw size={14} />
+                      </button>
                     )}
                     <button
                       onClick={(e) => {

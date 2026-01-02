@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import UploadPdfDialog from "../shared/UploadPdfDialog";
-import { Trash2, Loader2 } from "lucide-react";
+import { Trash2, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 function PdfLibraryPage() {
@@ -51,6 +51,10 @@ function PdfLibraryPage() {
                   ...f,
                   is_ingested: data.is_ingested,
                   ingest_error: data.ingest_error,
+                  ...(data.ingest_status != null ? { ingest_status: data.ingest_status } : {}),
+                  ...(data.ingest_progress != null ? { ingest_progress: data.ingest_progress } : {}),
+                  ...(data.ingest_done_chunks != null ? { ingest_done_chunks: data.ingest_done_chunks } : {}),
+                  ...(data.ingest_total_chunks != null ? { ingest_total_chunks: data.ingest_total_chunks } : {}),
                 }
               : f
           )
@@ -85,6 +89,21 @@ function PdfLibraryPage() {
     } catch (e) {
       console.error(e);
       toast.error("Failed to delete PDF");
+    }
+  };
+
+  const handleRetryIngest = async (fileId) => {
+    if (!token) return;
+    try {
+      toast("Retrying embedding...");
+      const res = await axios.post(`/api/files/${fileId}/reingest/`, null, { headers });
+      const updated = res.data;
+      setFiles((prev) =>
+        prev.map((f) => (f.file_id === fileId ? { ...f, ...updated } : f))
+      );
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to retry embedding");
     }
   };
 
@@ -198,7 +217,15 @@ function PdfLibraryPage() {
                       borderBottom: "1px solid #f5f5f5",
                     }}
                   >
-                    {f.is_ingested === false ? (
+                    {f.ingest_status === "failed" ? (
+                      <span style={{ color: "#c00", fontSize: 12 }} title={f.ingest_error}>
+                        Failed
+                      </span>
+                    ) : f.ingest_status === "cancelled" ? (
+                      <span style={{ color: "#777", fontSize: 12 }}>Cancelled</span>
+                    ) : f.is_ingested === false ||
+                      f.ingest_status === "pending" ||
+                      f.ingest_status === "running" ? (
                       <span
                         title="Embedding in progress..."
                         style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
@@ -209,11 +236,13 @@ function PdfLibraryPage() {
                             animation: "spin 1s linear infinite",
                           }}
                         />
-                        Processing
-                      </span>
-                    ) : f.ingest_error ? (
-                      <span style={{ color: "#c00", fontSize: 12 }} title={f.ingest_error}>
-                        Failed
+                        {f.ingest_total_chunks == null ? "Preparing" : "Processing"}
+                        {f.ingest_total_chunks != null &&
+                        typeof f.ingest_progress === "number" ? (
+                          <span style={{ color: "#777", fontSize: 12 }}>
+                            ({f.ingest_progress}%)
+                          </span>
+                        ) : null}
                       </span>
                     ) : (
                       <span style={{ fontSize: 12, color: "#4caf50" }}>Ready</span>
@@ -225,6 +254,25 @@ function PdfLibraryPage() {
                       borderBottom: "1px solid #f5f5f5",
                     }}
                   >
+                    {f.ingest_status === "failed" && (
+                      <button
+                        type="button"
+                        onClick={() => handleRetryIngest(f.file_id)}
+                        title="Retry embedding"
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          cursor: "pointer",
+                          padding: 4,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          marginLeft: 6,
+                        }}
+                      >
+                        <RotateCcw size={14} />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => handleDeleteFile(f.file_id)}
@@ -236,6 +284,7 @@ function PdfLibraryPage() {
                         display: "inline-flex",
                         alignItems: "center",
                         justifyContent: "center",
+                        marginLeft: f.ingest_status === "failed" ? 6 : 0,
                       }}
                     >
                       <Trash2 size={14} />
