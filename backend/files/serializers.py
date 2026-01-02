@@ -14,6 +14,12 @@ class PdfFileSerializer(serializers.ModelSerializer):
             "created_at",
             "is_ingested",
             "ingest_error",
+            "ingest_status",
+            "ingest_progress",
+            "ingest_done_chunks",
+            "ingest_total_chunks",
+            "ingest_started_at",
+            "ingest_finished_at",
         ]
         read_only_fields = [
             "id",
@@ -22,6 +28,12 @@ class PdfFileSerializer(serializers.ModelSerializer):
             "created_at",
             "is_ingested",
             "ingest_error",
+            "ingest_status",
+            "ingest_progress",
+            "ingest_done_chunks",
+            "ingest_total_chunks",
+            "ingest_started_at",
+            "ingest_finished_at",
         ]
 
 

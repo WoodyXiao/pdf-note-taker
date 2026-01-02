@@ -26,6 +26,29 @@ class PdfFile(models.Model):
     # Optional Celery task id for the ingest job (used for cancellation).
     ingest_task_id = models.CharField(max_length=255, null=True, blank=True)
 
+    # C3: richer ingest state (keeps backwards compatibility with is_ingested/ingest_error)
+    INGEST_PENDING = "pending"
+    INGEST_RUNNING = "running"
+    INGEST_SUCCEEDED = "succeeded"
+    INGEST_FAILED = "failed"
+    INGEST_CANCELLED = "cancelled"
+    INGEST_STATUS_CHOICES = [
+        (INGEST_PENDING, "Pending"),
+        (INGEST_RUNNING, "Running"),
+        (INGEST_SUCCEEDED, "Succeeded"),
+        (INGEST_FAILED, "Failed"),
+        (INGEST_CANCELLED, "Cancelled"),
+    ]
+
+    ingest_status = models.CharField(
+        max_length=16, choices=INGEST_STATUS_CHOICES, default=INGEST_PENDING
+    )
+    ingest_progress = models.PositiveSmallIntegerField(default=0)  # 0..100
+    ingest_total_chunks = models.IntegerField(null=True, blank=True)
+    ingest_done_chunks = models.IntegerField(null=True, blank=True)
+    ingest_started_at = models.DateTimeField(null=True, blank=True)
+    ingest_finished_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         constraints = [
             # Avoid duplicate uploads for the same user and the same content.

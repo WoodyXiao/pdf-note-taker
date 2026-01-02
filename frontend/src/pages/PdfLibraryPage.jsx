@@ -51,6 +51,10 @@ function PdfLibraryPage() {
                   ...f,
                   is_ingested: data.is_ingested,
                   ingest_error: data.ingest_error,
+                  ...(data.ingest_status != null ? { ingest_status: data.ingest_status } : {}),
+                  ...(data.ingest_progress != null ? { ingest_progress: data.ingest_progress } : {}),
+                  ...(data.ingest_done_chunks != null ? { ingest_done_chunks: data.ingest_done_chunks } : {}),
+                  ...(data.ingest_total_chunks != null ? { ingest_total_chunks: data.ingest_total_chunks } : {}),
                 }
               : f
           )
@@ -198,7 +202,15 @@ function PdfLibraryPage() {
                       borderBottom: "1px solid #f5f5f5",
                     }}
                   >
-                    {f.is_ingested === false ? (
+                    {f.ingest_status === "failed" ? (
+                      <span style={{ color: "#c00", fontSize: 12 }} title={f.ingest_error}>
+                        Failed
+                      </span>
+                    ) : f.ingest_status === "cancelled" ? (
+                      <span style={{ color: "#777", fontSize: 12 }}>Cancelled</span>
+                    ) : f.is_ingested === false ||
+                      f.ingest_status === "pending" ||
+                      f.ingest_status === "running" ? (
                       <span
                         title="Embedding in progress..."
                         style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
@@ -209,11 +221,13 @@ function PdfLibraryPage() {
                             animation: "spin 1s linear infinite",
                           }}
                         />
-                        Processing
-                      </span>
-                    ) : f.ingest_error ? (
-                      <span style={{ color: "#c00", fontSize: 12 }} title={f.ingest_error}>
-                        Failed
+                        {f.ingest_total_chunks == null ? "Preparing" : "Processing"}
+                        {f.ingest_total_chunks != null &&
+                        typeof f.ingest_progress === "number" ? (
+                          <span style={{ color: "#777", fontSize: 12 }}>
+                            ({f.ingest_progress}%)
+                          </span>
+                        ) : null}
                       </span>
                     ) : (
                       <span style={{ fontSize: 12, color: "#4caf50" }}>Ready</span>

@@ -96,6 +96,10 @@ function NotebookPage() {
                   ...f,
                   is_ingested: data.is_ingested,
                   ingest_error: data.ingest_error,
+                  ...(data.ingest_status != null ? { ingest_status: data.ingest_status } : {}),
+                  ...(data.ingest_progress != null ? { ingest_progress: data.ingest_progress } : {}),
+                  ...(data.ingest_done_chunks != null ? { ingest_done_chunks: data.ingest_done_chunks } : {}),
+                  ...(data.ingest_total_chunks != null ? { ingest_total_chunks: data.ingest_total_chunks } : {}),
                 }
               : f
           )
@@ -263,7 +267,14 @@ function NotebookPage() {
             <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
               {files.map((f) => {
                 const checked = selectedFileIds.includes(f.file_id);
-                const isProcessing = f.is_ingested === false;
+                const isProcessing =
+                  f.is_ingested === false ||
+                  f.ingest_status === "pending" ||
+                  f.ingest_status === "running";
+                const showPercent =
+                  isProcessing &&
+                  f.ingest_total_chunks != null &&
+                  typeof f.ingest_progress === "number";
                 return (
                   <li
                     key={f.file_id}
@@ -300,6 +311,16 @@ function NotebookPage() {
                         >
                           {new Date(f.created_at).toLocaleString()}
                         </span>
+                        {isProcessing && f.ingest_total_chunks == null ? (
+                          <span style={{ fontSize: 11, color: "#888" }}>
+                            Preparing…
+                          </span>
+                        ) : null}
+                        {showPercent ? (
+                          <span style={{ fontSize: 11, color: "#888" }}>
+                            Processing ({f.ingest_progress}%)
+                          </span>
+                        ) : null}
                       </div>
                     </label>
                     {isProcessing && (

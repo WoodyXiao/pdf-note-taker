@@ -80,7 +80,29 @@ def upload_pdf(request):
 
         existing.is_ingested = False
         existing.ingest_error = None
+        try:
+            existing.ingest_status = PdfFile.INGEST_PENDING
+            existing.ingest_progress = 0
+            existing.ingest_done_chunks = 0
+            existing.ingest_total_chunks = None
+            existing.ingest_started_at = None
+            existing.ingest_finished_at = None
+        except Exception:
+            pass
         existing.save(update_fields=["is_ingested", "ingest_error"])
+        try:
+            existing.save(
+                update_fields=[
+                    "ingest_status",
+                    "ingest_progress",
+                    "ingest_done_chunks",
+                    "ingest_total_chunks",
+                    "ingest_started_at",
+                    "ingest_finished_at",
+                ]
+            )
+        except Exception:
+            pass
 
         async_result = ingest_pdf_task.delay(existing.id)
         existing.ingest_task_id = async_result.id
@@ -115,6 +137,8 @@ def upload_pdf(request):
             created_by=user,
             content_sha256=content_sha256,
             size_bytes=getattr(file_obj, "size", None),
+            ingest_status=PdfFile.INGEST_PENDING,
+            ingest_progress=0,
         )
     except IntegrityError:
         pdf_file = (
