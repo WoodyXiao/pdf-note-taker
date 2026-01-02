@@ -15,7 +15,7 @@ import {
 import axios from "axios";
 import { toast } from "sonner";
 
-function EditorExtension({ editor, fileId, notebookId }) {
+function EditorExtension({ editor, fileId, notebookId, onRequestSaveNow }) {
   if (!editor) return null;
 
   const onAIClick = async () => {
@@ -76,10 +76,17 @@ function EditorExtension({ editor, fileId, notebookId }) {
       );
 
       const finalText = res.data.html || "";
-      const allText = editor.getHTML();
-      editor.commands.setContent(
-        allText + `<p><strong>Answer(AI): </strong>${finalText}</p>`
-      );
+      // Append the answer to the end of the note.
+      editor
+        .chain()
+        .focus()
+        .insertContent(`<p><strong>Answer (AI):</strong></p>${finalText}`)
+        .run();
+
+      // Critical: persist immediately so logout / route change won't lose it.
+      if (typeof onRequestSaveNow === "function") {
+        await onRequestSaveNow();
+      }
     } catch (e) {
       console.error(e);
       toast.error("AI request failed");

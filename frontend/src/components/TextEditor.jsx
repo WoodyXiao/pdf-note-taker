@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import axios from "axios";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -9,6 +9,8 @@ import Color from "@tiptap/extension-color";
 import EditorExtension from "./EditorExtension";
 
 function TextEditor({ fileId, notebookId }) {
+  const saveTimerRef = useRef(null);
+
   const editor = useEditor({
     extensions: [
       TextStyle,
@@ -27,6 +29,40 @@ function TextEditor({ fileId, notebookId }) {
       },
     },
   });
+
+  const saveNow = useCallback(async () => {
+    if (!editor || !notebookId) return;
+
+    // If there's a pending debounce, cancel it and save immediately.
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
+    const token = localStorage.getItem("authToken");
+    if (!token) return;
+
+    const json = editor.getJSON();
+    try {
+      await axios.put(
+        `/api/files/notebooks/${notebookId}/content/`,
+        {
+          pages: [
+            {
+              title: "Main",
+              order_index: 0,
+              content: json,
+            },
+          ],
+        },
+        {
+          headers: { Authorization: `Token ${token}` },
+        }
+      );
+    } catch (err) {
+      console.error("Failed to save notebook content", err);
+    }
+  }, [editor, notebookId]);
 
   // Load existing notebook content on mount.
   useEffect(() => {
@@ -57,51 +93,28 @@ function TextEditor({ fileId, notebookId }) {
   useEffect(() => {
     if (!editor || !notebookId) return;
 
-    const token = localStorage.getItem("authToken");
-    if (!token) return;
-
-    let timer = null;
-
-    const save = () => {
-      const json = editor.getJSON();
-      axios
-        .put(
-          `/api/files/notebooks/${notebookId}/content/`,
-          {
-            pages: [
-              {
-                title: "Main",
-                order_index: 0,
-                content: json,
-              },
-            ],
-          },
-          {
-            headers: { Authorization: `Token ${token}` },
-          }
-        )
-        .catch((err) => {
-          console.error("Failed to save notebook content", err);
-        });
-    };
-
     const onUpdate = () => {
-      if (timer) {
-        clearTimeout(timer);
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
       }
       // Save 2s after the last change.
-      timer = setTimeout(save, 2000);
+      saveTimerRef.current = setTimeout(() => {
+        saveNow();
+      }, 2000);
     };
 
     editor.on("update", onUpdate);
 
     return () => {
       editor.off("update", onUpdate);
-      if (timer) {
-        clearTimeout(timer);
+      // If we have a pending save, flush it before unmounting (best-effort).
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+        saveNow();
       }
     };
-  }, [editor, notebookId]);
+  }, [editor, notebookId, saveNow]);
 
   return (
     <div
@@ -111,7 +124,12 @@ function TextEditor({ fileId, notebookId }) {
         flexDirection: "column",
       }}
     >
-      <EditorExtension editor={editor} fileId={fileId} notebookId={notebookId} />
+      <EditorExtension
+        editor={editor}
+        fileId={fileId}
+        notebookId={notebookId}
+        onRequestSaveNow={saveNow}
+      />
       <div
         style={{
           flex: 1,
