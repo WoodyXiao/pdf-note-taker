@@ -3,6 +3,7 @@ import os
 
 import redis
 from celery import shared_task
+from django.db import IntegrityError
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -87,32 +88,48 @@ def ingest_pdf_task(pdf_file_id: int) -> None:
             total = len(texts)
 
             for start in range(0, total, BATCH_SIZE):
+                # If the file was deleted while ingesting, stop immediately.
+                if not PdfFile.objects.filter(id=pdf_file_id).exists():
+                    return
+
                 batch_texts = texts[start : start + BATCH_SIZE]
                 batch_pages = pages[start : start + BATCH_SIZE]
 
                 vectors = embeddings_model.embed_documents(batch_texts)
 
-                DocumentEmbedding.objects.bulk_create(
-                    [
-                        DocumentEmbedding(
-                            file=pdf_file,
-                            text=text,
-                            embedding=vector,
-                            page_number=page,
-                        )
-                        for text, vector, page in zip(
-                            batch_texts, vectors, batch_pages
-                        )
-                    ]
-                )
+                # Re-check right before writing, in case deletion happened during the API call.
+                if not PdfFile.objects.filter(id=pdf_file_id).exists():
+                    return
+
+                try:
+                    DocumentEmbedding.objects.bulk_create(
+                        [
+                            DocumentEmbedding(
+                                file=pdf_file,
+                                text=text,
+                                embedding=vector,
+                                page_number=page,
+                            )
+                            for text, vector, page in zip(
+                                batch_texts, vectors, batch_pages
+                            )
+                        ]
+                    )
+                except IntegrityError:
+                    # Most likely: PdfFile was deleted and FK insert fails.
+                    return
 
         # Mark ingest as finished (even if no texts; there is nothing more to do).
+        if not PdfFile.objects.filter(id=pdf_file_id).exists():
+            return
         pdf_file.is_ingested = True
         pdf_file.ingest_error = None
         pdf_file.save(update_fields=["is_ingested", "ingest_error"])
         _publish_ingest_event(pdf_file)
 
     except Exception as exc:  # pragma: no cover - defensive logging
+        if not PdfFile.objects.filter(id=pdf_file_id).exists():
+            return
         # Record the error so the UI can stop showing an infinite spinner.
         pdf_file.is_ingested = True
         pdf_file.ingest_error = str(exc)

@@ -184,6 +184,13 @@ def get_file(request, file_id):
                 # Cancellation is best-effort only; deletion should still proceed.
                 pass
 
+        # Best-effort: delete embeddings immediately to avoid leaving partial data around.
+        # (CASCADE on PdfFile delete will also remove these, but explicit cleanup is faster/clearer.)
+        try:
+            DocumentEmbedding.objects.filter(file=pdf_file).delete()
+        except Exception:
+            pass
+
         # Log before delete so we still have target info
         log_activity(
             user=request.user,
