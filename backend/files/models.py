@@ -2,6 +2,7 @@ import uuid
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 from pgvector.django import VectorField
 
 
@@ -13,12 +14,28 @@ class PdfFile(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="pdf_files"
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    # Content fingerprint used for per-user dedup. SHA-256 hex string.
+    # Nullable for backwards compatibility with existing DBs/branches.
+    content_sha256 = models.CharField(max_length=64, null=True, blank=True, db_index=True)
+    # Optional file size (helps debugging/UX)
+    size_bytes = models.BigIntegerField(null=True, blank=True)
     # Whether the background embedding/ingest job has finished for this PDF.
     is_ingested = models.BooleanField(default=False)
     # Optional error message if ingest failed.
     ingest_error = models.TextField(null=True, blank=True)
     # Optional Celery task id for the ingest job (used for cancellation).
     ingest_task_id = models.CharField(max_length=255, null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            # Avoid duplicate uploads for the same user and the same content.
+            # Keep nullable rows allowed; only enforce when content_sha256 is present.
+            models.UniqueConstraint(
+                fields=["created_by", "content_sha256"],
+                condition=Q(content_sha256__isnull=False) & ~Q(content_sha256=""),
+                name="uniq_user_content_sha256",
+            )
+        ]
 
     def __str__(self):
         return self.file_name
