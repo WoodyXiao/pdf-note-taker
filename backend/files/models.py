@@ -70,7 +70,17 @@ class DocumentEmbedding(models.Model):
     file = models.ForeignKey(
         PdfFile, on_delete=models.CASCADE, related_name="embeddings"
     )
+    # In Phase 1+ (video-style RAG), this stores the *summary text* used for embedding/retrieval.
+    # The raw/original chunk content is stored in DocumentChunk and linked via `chunk`.
     text = models.TextField()
+    # Link to the original (raw) chunk content in our doc store.
+    chunk = models.ForeignKey(
+        "DocumentChunk",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="embeddings",
+    )
     embedding = VectorField(dimensions=768)
     # Optional page number within the source PDF (1-based indexing)
     page_number = models.IntegerField(null=True, blank=True)
@@ -78,6 +88,40 @@ class DocumentEmbedding(models.Model):
 
     def __str__(self):
         return f"Embedding for {self.file.file_name}"
+
+
+class DocumentChunk(models.Model):
+    """Doc store for original extracted content (Phase 1: text only; later table/image)."""
+
+    TYPE_TEXT = "text"
+    TYPE_TABLE = "table"
+    TYPE_IMAGE = "image"
+    TYPE_CHOICES = [
+        (TYPE_TEXT, "Text"),
+        (TYPE_TABLE, "Table"),
+        (TYPE_IMAGE, "Image"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    file = models.ForeignKey(
+        PdfFile, on_delete=models.CASCADE, related_name="chunks"
+    )
+    chunk_type = models.CharField(
+        max_length=16, choices=TYPE_CHOICES, default=TYPE_TEXT
+    )
+    title = models.CharField(max_length=255, blank=True)
+    # Inclusive 1-based page range (often spans multiple pages with by-title chunking).
+    page_start = models.IntegerField(null=True, blank=True)
+    page_end = models.IntegerField(null=True, blank=True)
+    raw_text = models.TextField(blank=True)
+    metadata = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.file.file_name} [{self.chunk_type}] {self.title or 'chunk'}"
 
 
 class Notebook(models.Model):
