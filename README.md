@@ -55,6 +55,18 @@ A simple full-stack project for uploading PDFs and taking notes, built with a **
    NEXT_PUBLIC_GEMINI_API_KEY=your_gemini_api_key
    GEMINI_CHAT_MODEL=gemini-flash-latest
 
+   # PDF summary guardrails (Phase 1 text-only)
+   # - To reduce 429s in dev, we cap how many chunks per PDF will use LLM summaries.
+   # - Remaining chunks use a truncation-based fallback summary (cheap, always progresses).
+   PDF_SUMMARY_MAX_LLM_CHUNKS_PER_PDF=24
+   PDF_SUMMARY_BATCH_SIZE=3
+   PDF_SUMMARY_TRUNCATE_CHARS=1800
+
+   # Unstructured by-title chunking knobs (Phase 1)
+   PDF_UNSTRUCTURED_MAX_CHARACTERS=10000
+   PDF_UNSTRUCTURED_COMBINE_UNDER_N_CHARS=2000
+   PDF_UNSTRUCTURED_NEW_AFTER_N_CHARS=6000
+
    # Celery / Redis
    CELERY_BROKER_URL=redis://localhost:6379/0
    CELERY_RESULT_BACKEND=redis://localhost:6379/0
@@ -71,7 +83,8 @@ A simple full-stack project for uploading PDFs and taking notes, built with a **
    ```bash
    cd backend
    source .venv/bin/activate
-   celery -A core worker -l info
+   # Recommended for dev to avoid quota/rate-limit spikes:
+   celery -A core worker -l info --concurrency=1
    ```
 
 8. Start the Django development server (in another terminal, with the venv activated):

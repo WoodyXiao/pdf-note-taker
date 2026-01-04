@@ -10,7 +10,7 @@ from rest_framework.response import Response
 
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 
-from files.models import ChatMessage, DocumentEmbedding, Notebook, NotebookPdf, PdfFile
+from files.models import ChatMessage, DocumentChunk, DocumentEmbedding, Notebook, NotebookPdf, PdfFile
 
 
 @api_view(["POST"])
@@ -81,11 +81,35 @@ def answer(request):
     # 3. Retrieve top-k similar chunks across the selected files
     candidates = (
         DocumentEmbedding.objects.filter(file__in=files_qs)
+        .select_related("chunk")
         .annotate(distance=CosineDistance("embedding", query_vector))
         .order_by("distance")[:10]
     )
 
-    all_unformatted_answer = "".join([c.text for c in candidates])
+    # Build context from doc store chunks (raw text), fallback to summary if missing.
+    context_parts = []
+    for idx, c in enumerate(candidates, start=1):
+        if c.chunk_id:
+            chunk: DocumentChunk = c.chunk  # type: ignore
+            title = (chunk.title or "").strip()
+            page_start = chunk.page_start
+            page_end = chunk.page_end
+            page_label = ""
+            if page_start and page_end and page_start != page_end:
+                page_label = f"p{page_start}–p{page_end}"
+            elif page_start:
+                page_label = f"p{page_start}"
+            header = f"[{idx}] {c.file.file_name}"
+            if page_label:
+                header += f" ({page_label})"
+            if title:
+                header += f" — {title}"
+            context_parts.append(header + "\n" + (chunk.raw_text or "") + "\n")
+        else:
+            # Legacy fallback
+            context_parts.append(f"[{idx}] {c.file.file_name}\n{c.text}\n")
+
+    all_unformatted_answer = "\n---\n".join(context_parts)
 
     # 3. Ask Gemini to answer in HTML format
     # Prefer model from environment (configured in Google AI Studio), fallback to gemini-flash-latest.
@@ -161,7 +185,13 @@ def answer(request):
     sources_by_file = defaultdict(lambda: {"pages": set(), "has_page": False})
     for c in candidates:
         entry = sources_by_file[c.file.file_name]
-        if c.page_number:
+        if c.chunk_id and c.chunk and c.chunk.page_start:
+            ps = c.chunk.page_start
+            pe = c.chunk.page_end or ps
+            for p in range(ps, pe + 1):
+                entry["pages"].add(p)
+            entry["has_page"] = True
+        elif c.page_number:
             entry["pages"].add(c.page_number)
             entry["has_page"] = True
 

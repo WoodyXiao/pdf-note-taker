@@ -16,6 +16,7 @@ from .models import (
     ActivityLog,
     ChatMessage,
     DocumentEmbedding,
+    DocumentChunk,
     Notebook,
     NotebookPage,
     NotebookPdf,
@@ -75,6 +76,7 @@ def upload_pdf(request):
         # Best-effort cleanup of old embeddings (avoid mixing old + new).
         try:
             DocumentEmbedding.objects.filter(file=existing).delete()
+            DocumentChunk.objects.filter(file=existing).delete()
         except Exception:
             pass
 
@@ -253,6 +255,7 @@ def reingest_file(request, file_id):
     # Clean old embeddings so we don't mix old+new runs.
     try:
         DocumentEmbedding.objects.filter(file=pdf_file).delete()
+        DocumentChunk.objects.filter(file=pdf_file).delete()
     except Exception:
         pass
 
